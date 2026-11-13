@@ -1,0 +1,298 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "ERP-AM Backend API",
+    "version": "1.0.0",
+    "description": "Tài liệu API Hệ thống ERP-AM (Base Auth)"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8081",
+      "description": "Local Development Server (Port 8081)"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Thao tác thành công"
+          }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "username": {
+            "type": "string",
+            "example": "admin_root"
+          },
+          "full_name": {
+            "type": "string",
+            "example": "Quản trị viên Hệ thống (Root)"
+          },
+          "role": {
+            "type": "string",
+            "example": "ADMIN"
+          },
+          "is_active": {
+            "type": "boolean",
+            "example": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "admin_root"
+          },
+          "password": {
+            "type": "string",
+            "example": "Admin123@"
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "token": {
+                "type": "string"
+              },
+              "access_token": {
+                "type": "string"
+              },
+              "refreshToken": {
+                "type": "string"
+              },
+              "refresh_token": {
+                "type": "string"
+              },
+              "token_type": {
+                "type": "string",
+                "example": "Bearer"
+              },
+              "expires_in": {
+                "type": "integer",
+                "example": 28800
+              },
+              "user": {
+                "$ref": "#/components/schemas/UserProfile"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "summary": "Đăng nhập hệ thống",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đăng nhập thành công, trả về JWT Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sai tên đăng nhập hoặc mật khẩu"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "summary": "Lấy thông tin tài khoản hiện tại",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trả về thông tin người dùng đang đăng nhập",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/UserProfile"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "summary": "Đăng xuất hệ thống",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Đăng xuất thành công"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "summary": "Làm mới Token phiên đăng nhập",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Trả về access token mới"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/change-password": {
+      "put": {
+        "summary": "Đổi mật khẩu cá nhân",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "old_password",
+                  "new_password"
+                ],
+                "properties": {
+                  "old_password": {
+                    "type": "string"
+                  },
+                  "new_password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đổi mật khẩu thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "API Xác thực & Đăng nhập (Auth Base)"
+    }
+  ]
+}

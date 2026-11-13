@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-30T09:48:30+07:00",
+  "title": "Design System: ERP-AM",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Executive Navy",
+        "canonical": "#0f234a",
+        "tonalRamp": ["#071228", "#0a1a38", "#0f234a", "#1e3a6e", "#335899", "#6487c4", "#b3c7e6", "#e8eef8"]
+      },
+      "surface-canvas": {
+        "role": "neutral",
+        "displayName": "Cool Ledger Canvas",
+        "canonical": "#f8fafc",
+        "tonalRamp": ["#0f172a", "#1e293b", "#334155", "#475569", "#64748b", "#cbd5e1", "#f1f5f9", "#f8fafc"]
+      },
+      "status-healthy": {
+        "role": "secondary",
+        "displayName": "Accepted Emerald",
+        "canonical": "#047857",
+        "tonalRamp": ["#064e3b", "#065f46", "#047857", "#059669", "#10b981", "#6ee7b7", "#d1fae5", "#ecfdf5"]
+      },
+      "status-warning": {
+        "role": "tertiary",
+        "displayName": "Check-in Amber",
+        "canonical": "#b45309",
+        "tonalRamp": ["#78350f", "#92400e", "#b45309", "#d97706", "#f59e0b", "#fcd34d", "#fef3c7", "#fffbeb"]
+      },
+      "status-danger": {
+        "role": "tertiary",
+        "displayName": "Deficit Crimson",
+        "canonical": "#b91c1c",
+        "tonalRamp": ["#7f1d1d", "#991b1b", "#b91c1c", "#dc2626", "#ef4444", "#fca5a5", "#fee2e2", "#fef2f2"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display / Page Title", "purpose": "Top-level workspace screen headers." },
+      "headline": { "displayName": "Headline / Section Header", "purpose": "Ledger table headers and modal titles." },
+      "title": { "displayName": "Title / Project Link", "purpose": "Interactive contract and project titles." },
+      "body": { "displayName": "Body / Table Cell", "purpose": "Primary ledger row copy and descriptions." },
+      "label": { "displayName": "Label / Monospace Code", "purpose": "Contract codes, milestone codes, and tabular figures." }
+    },
+    "shadows": [
+      { "name": "flat-border", "value": "0 0 0 1px #e2e8f0", "purpose": "Default structural containment for tables and cards without drop-shadow noise." }
+    ],
+    "motion": [
+      { "name": "ease-out-snappy", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Fast state transitions on row hover and drawer reveal." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary CTA button used across page headers and confirmation dialogs.",
+      "html": "<button class=\"ds-btn-primary\">Ghi khoản chi AM</button>",
+      "css": ".ds-btn-primary { background: #0f234a; color: #ffffff; padding: 8px 16px; font-size: 14px; font-weight: 500; border: 1px solid #0f234a; border-radius: 8px; cursor: pointer; transition: background-color 0.15s ease; } .ds-btn-primary:hover { background: #1e3a6e; } .ds-btn-primary:focus-visible { outline: 2px solid #0f234a; outline-offset: 2px; }"
+    },
+    {
+      "name": "Ledger Container Card",
+      "kind": "card",
+      "refersTo": "card-ledger",
+      "description": "Single-layer bordered container with internal hairline dividers instead of nested cards.",
+      "html": "<div class=\"ds-card-ledger\"><div class=\"ds-card-header\">Sổ Đối Soát Quỹ Tạm Ứng</div><div class=\"ds-card-row\">HĐ-2026/01 — 12.500.000 ₫</div></div>",
+      "css": ".ds-card-ledger { background: #ffffff; color: #0f172a; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; } .ds-card-header { padding: 14px 20px; font-weight: 600; font-size: 15px; border-bottom: 1px solid #f1f5f9; } .ds-card-row { padding: 12px 20px; font-size: 14px; font-variant-numeric: tabular-nums; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Ledger Cockpit",
+    "overview": "ERP-AM mang tinh thần của một buồng lái sổ cái hiện đại lấy cảm hứng từ Productive.io: mật độ thông tin cao nhưng thoáng mắt, bề mặt phẳng sắc nét, phân tách dữ liệu bằng đường kẻ mảnh 1px (#e2e8f0) và khoảng trắng có nhịp điệu thay vì lồng nhiều lớp hộp thoại hay thẻ Card chồng chéo.",
+    "keyCharacteristics": [
+      "Phẳng và Tách lớp bằng Đường kẻ (1px Rule)",
+      "Số liệu Sổ cái Chuẩn xác (tabular-nums)",
+      "Một Giọng Màu Hành động Duy nhất (#0f234a)"
+    ],
+    "rules": [
+      {
+        "name": "The Single Primary Voice Rule",
+        "body": "Mọi nút CTA chính trên cả trang danh sách lẫn trong Modal/Dialog đều sử dụng thống nhất --primary (#0f234a) hoặc slate-900 (#0f172a). Tuyệt đối không dùng màu tím rời rạc (#5B3DF5) làm phân mảnh nhận diện.",
+        "section": "colors"
+      },
+      {
+        "name": "The AA Ledger Contrast Rule",
+        "body": "Không bao giờ dùng text-slate-400 (#90a1b9) cho chữ cần đọc trên nền trắng hoặc nền xám nhạt vì tỷ lệ tương phản chỉ đạt 2.6:1. Mọi tiêu đề cột th và dòng mô tả phụ phải dùng tối thiểu text-slate-500 (#64748b) hoặc text-slate-600 (#475569).",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Numerals Rule",
+        "body": "Mọi cột số tiền (VNĐ), số ngày công (MD), số lượng chứng từ và ngày tháng bắt buộc áp dụng tabular-nums và căn phải (text-right) đối với đại lượng đo lường.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Nested-Cards Rule",
+        "body": "Một vùng chứa đã có khung viền (rounded-xl border border-slate-200 bg-white) thì các danh sách dự án hoặc hạng mục con bên trong tuyệt đối không được bọc thêm một lớp Card có border nữa.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do sử dụng tabular-nums và text-right cho mọi cột số tiền (VNĐ) và ngày công (MD).",
+      "Do dùng text-slate-500 (#64748b) hoặc đậm hơn cho toàn bộ tiêu đề cột <th> và văn bản mô tả phụ trên nền sáng.",
+      "Do dùng divide-y divide-slate-100 để phân tách các mục bên trong một Card thay vì tạo thêm các thẻ có viền lồng bên trong.",
+      "Do đảm bảo các nút xóa nhỏ (như xóa Tag hợp đồng) có kích thước vùng bấm tối thiểu 24x24px."
+    ],
+    "donts": [
+      "Don't lồng thẻ .rounded-lg.border bên trong một .rounded-xl.border (nested-cards).",
+      "Don't dùng text-slate-400 cho văn bản thông tin hoặc placeholder trên nền trắng/xám nhạt (low-contrast).",
+      "Don't hardcode màu tím #5B3DF5 cho nút lưu hoặc badge khi hệ thống đã định nghĩa --primary: #0f234a.",
+      "Don't đặt nhãn chữ hoa nhỏ (kicker/eyebrow) ngay phía trên thẻ <h1> hoặc dùng lưới kẻ ô / đốm sáng radial-gradient trang trí vô nghĩa trên nền tối."
+    ]
+  }
+}
+

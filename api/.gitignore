@@ -1,0 +1,28 @@
+# Cấu hình bỏ qua theo dõi file cho Git
+
+# Node.js dependencies (Nguồn gốc của 8000 file rác)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Biến môi trường chứa thông tin nhạy cảm
+.env
+src/.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Thư mục lưu Logs
+logs/
+*.log
+
+# Các file do Hệ điều hành tự sinh ra
+.DS_Store
+Thumbs.db
+
+# Docker 
+.docker/
+docker-compose.override.yml
+uploads/

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+  body { width: 1440px; height: 900px; overflow: hidden; background: #f4f6f9; color: #0f172a; display: flex; flex-direction: column; }
+  .shell { background: #0f234a; color: #fff; padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0d9488; }
+  .brand { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: center; gap: 12px; }
+  .nav { display: flex; gap: 18px; font-size: 13px; color: #cbd5e1; }
+  .nav span.active { background: rgba(255,255,255,0.14); color: #fff; padding: 6px 14px; border-radius: 6px; font-weight: 600; }
+  .main { padding: 24px 32px; display: flex; flex-direction: column; gap: 20px; flex: 1; }
+  .triage { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .triage-card { background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; }
+  .triage-card.alert { border-left: 5px solid #e11d48; background: #fff1f2; }
+  .triage-card.warn { border-left: 5px solid #d97706; }
+  .triage-card.good { border-left: 5px solid #0d9488; }
+  .big-num { font-size: 42px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+  .alert .big-num { color: #e11d48; }
+  .warn .big-num { color: #d97706; }
+  .good .big-num { color: #0d9488; }
+  .board { background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .board-head { padding: 16px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
+  .board-title { font-size: 22px; font-weight: 700; color: #0f234a; }
+  .row { display: grid; grid-template-columns: 280px 1fr 340px; gap: 24px; padding: 18px 24px; border-bottom: 1px solid #e2e8f0; align-items: center; }
+  .row.focused { background: #f0fdfa; border-left: 4px solid #0f234a; box-shadow: 0 4px 12px rgba(15,35,74,0.08); }
+  .tide-gauge { height: 28px; background: #f1f5f9; border-radius: 6px; position: relative; overflow: hidden; border: 1px solid #cbd5e1; }
+  .tide-fill { height: 100%; background: linear-gradient(90deg, #0d9488, #0f234a); width: 72%; }
+  .tide-fill.danger { background: linear-gradient(90deg, #f59e0b, #e11d48); width: 94%; }
+  .tide-marker { position: absolute; top: 0; bottom: 0; width: 3px; background: #0f172a; left: 75%; }
+  .side-b { background: #f8fafc; border-left: 2px dashed #cbd5e1; padding-left: 20px; display: flex; justify-content: space-between; align-items: center; }
+  .btn { background: #0f234a; color: #fff; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .btn.red { background: #e11d48; }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <div class="brand">⚓ ERP-AM • SỔ HẢI ĐỒ NGÂN SÁCH & DÒNG TIỀN</div>
+    <div class="nav">
+      <span class="active">Tổng quan Thủy triều</span>
+      <span>Việc cần xử lý (5)</span>
+      <span>Hợp đồng & Mốc</span>
+      <span>ĐNTT & Hóa đơn VAT</span>
+      <span>Quỹ Tạm ứng AM</span>
+    </div>
+  </div>
+  <div class="main">
+    <div class="triage">
+      <div class="triage-card alert">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#9f1239">BÁO ĐỘNG VƯỢT TRẦN NGÀY CÔNG</div>
+          <div style="font-size:22px;font-weight:700;margin-top:4px">2 Dự án đang âm quỹ</div>
+        </div>
+        <div class="big-num">-14 MD</div>
+      </div>
+      <div class="triage-card warn">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#92400e">CỔNG THU TIỀN ĐẾN HẠN HÔM NAY</div>
+          <div style="font-size:22px;font-weight:700;margin-top:4px">3 Đợt cần gửi ĐNTT</div>
+        </div>
+        <div class="big-num">485tr</div>
+      </div>
+      <div class="triage-card good">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#115e59">BẰNG CHỨNG HỖ TRỢ 0Đ TÍCH LŨY</div>
+          <div style="font-size:22px;font-weight:700;margin-top:4px">9 Lần hỗ trợ miễn phí</div>
+        </div>
+        <div class="big-num">+18 MD</div>
+      </div>
+    </div>
+    <div class="board">
+      <div class="board-head">
+        <div class="board-title">Mặt A: Thước Thủy Triều Ngày Công (Real / Target / Limit)  |  Mặt B: Cổng Thanh Toán & 0đ</div>
+        <div class="btn">+ Ghi nhận Manday / Khoản chi</div>
+      </div>
+      <div class="row focused">
+        <div>
+          <div style="font-size:12px;color:#e11d48;font-weight:700">HĐ-2026/01 • VƯỢT TARGET (+6 MD)</div>
+          <div style="font-size:22px;font-weight:700">Hệ thống ERP Logistics Tân Cảng</div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;font-weight:600">
+            <span>Đã dùng: 86 MD</span><span>Target: 80 MD</span><span style="color:#e11d48">Trần Limit: 90 MD</span>
+          </div>
+          <div class="tide-gauge"><div class="tide-fill danger"></div><div class="tide-marker"></div></div>
+        </div>
+        <div class="side-b">
+          <div><div style="font-size:12px;color:#475569">Đợt 2 (M2 xong)</div><div style="font-size:22px;font-weight:700;color:#e11d48">220.000.000 ₫</div></div>
+          <div class="btn red">Đòi tiền & Xuất VAT →</div>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <div style="font-size:12px;color:#0d9488;font-weight:700">HĐ-2026/02 • AN TOÀN (+12 MD DƯ)</div>
+          <div style="font-size:22px;font-weight:700">Cổng Thanh Toán Học Phí EduPay</div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;font-weight:600">
+            <span>Đã dùng: 38 MD</span><span>Target: 50 MD</span><span>Trần Limit: 65 MD</span>
+          </div>
+          <div class="tide-gauge"><div class="tide-fill"></div><div class="tide-marker"></div></div>
+        </div>
+        <div class="side-b">
+          <div><div style="font-size:12px;color:#475569">Thưởng 50/50 tạm tính</div><div style="font-size:22px;font-weight:700;color:#0d9488">+36.000.000 ₫</div></div>
+          <div class="btn">Log Manday kỳ này</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+

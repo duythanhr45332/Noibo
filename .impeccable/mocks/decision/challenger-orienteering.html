@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+  body { width: 1440px; height: 900px; overflow: hidden; background: #f3f4ed; color: #1e293b; padding: 28px 36px; display: flex; flex-direction: column; gap: 22px; }
+  .head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #7c3aed; padding-bottom: 16px; }
+  .course-card { background: #fff; border: 1px solid #d1d5db; border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+  .track { display: flex; align-items: center; justify-content: space-between; position: relative; padding: 16px 0; }
+  .line { position: absolute; left: 40px; right: 40px; height: 4px; background: #7c3aed; top: 50%; z-index: 1; }
+  .node { position: relative; z-index: 2; background: #fff; border: 3px solid #7c3aed; border-radius: 99px; padding: 10px 18px; font-weight: 700; font-size: 14px; }
+  .node.alert { border-color: #dc2626; background: #fef2f2; color: #dc2626; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div style="font-size:28px;font-weight:800;color:#4c1d95">BẢN ĐỒ CHẶNG NGHIỆM THU & CỔNG THANH TOÁN (MILESTONE COURSE)</div>
+    <div style="font-size:22px;font-weight:700;color:#dc2626">2 Chặng kẹt Manday • 3 Cổng cần thu tiền</div>
+  </div>
+  <div class="course-card">
+    <div style="font-size:24px;font-weight:700">HĐ-2026/01 — Hệ thống ERP Logistics Tân Cảng (86/90 MD)</div>
+    <div class="track">
+      <div class="line"></div>
+      <div class="node">✓ M1: Khảo sát (15/15 MD)</div>
+      <div class="node">✓ Đợt 1: Đã thu 150tr</div>
+      <div class="node alert">⚠ M2: Core Kho (46/35 MD)</div>
+      <div class="node alert">💰 Đợt 2: Cần đòi 220tr</div>
+      <div class="node">○ M3: UAT & Bàn giao</div>
+    </div>
+  </div>
+  <div class="course-card">
+    <div style="font-size:24px;font-weight:700">HĐ-2026/02 — Cổng Thanh Toán Học Phí EduPay (38/65 MD)</div>
+    <div class="track">
+      <div class="line"></div>
+      <div class="node">✓ M1: Thiết kế UI (12/15 MD)</div>
+      <div class="node">✓ Đợt 1: Đã thu 120tr</div>
+      <div class="node">● M2: Tích hợp VietQR (26/35 MD)</div>
+      <div class="node">○ Đợt 2: Chờ M2 xong</div>
+    </div>
+  </div>
+</body>
+</html>
+

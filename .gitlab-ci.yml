@@ -1,0 +1,122 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  COMPOSE_HTTP_TIMEOUT: "200"
+
+# ==============================================================
+# STAGE: BUILD (MAIN)
+# ==============================================================
+.build-template:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  tags:
+    - erp-am.dev
+  before_script:
+    - if [ -n "$CI_REGISTRY_IMAGE" ]; then docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY; fi
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+build-api:
+  extends: .build-template
+  script:
+    - echo "Building API Image..."
+    - export REG_IMAGE=${CI_REGISTRY_IMAGE:-erp-am-local-registry}
+    - cd api
+    - docker build -t $REG_IMAGE/api:$CI_COMMIT_SHORT_SHA -t $REG_IMAGE/api:latest .
+    - if [ -n "$CI_REGISTRY_IMAGE" ]; then docker push $REG_IMAGE/api:$CI_COMMIT_SHORT_SHA; fi
+    - if [ -n "$CI_REGISTRY_IMAGE" ]; then docker push $REG_IMAGE/api:latest; fi
+
+build-web:
+  extends: .build-template
+  script:
+    - echo "Building Web Image..."
+    - export REG_IMAGE=${CI_REGISTRY_IMAGE:-erp-am-local-registry}
+    - cd web
+    - docker build -t $REG_IMAGE/web:$CI_COMMIT_SHORT_SHA -t $REG_IMAGE/web:latest .
+    - if [ -n "$CI_REGISTRY_IMAGE" ]; then docker push $REG_IMAGE/web:$CI_COMMIT_SHORT_SHA; fi
+    - if [ -n "$CI_REGISTRY_IMAGE" ]; then docker push $REG_IMAGE/web:latest; fi
+
+# ==============================================================
+# STAGE: DEPLOY
+# ==============================================================
+.deploy-template:
+  stage: deploy
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  before_script:
+    - if [ -n "$CI_REGISTRY_IMAGE" ]; then docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY; fi
+    - apk add --no-cache docker-compose
+  script:
+    - echo "Deploying to $CI_ENVIRONMENT_NAME..."
+    - export CI_REGISTRY_IMAGE=${CI_REGISTRY_IMAGE:-erp-am-local-registry}
+    - if [ "$CI_REGISTRY_IMAGE" != "erp-am-local-registry" ]; then docker-compose -f docker-compose.deploy.yml pull; fi
+    - docker-compose -f docker-compose.deploy.yml up -d
+
+deploy-staging:
+  extends: .deploy-template
+  tags:
+    - erp-am.dev
+  environment:
+    name: staging
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+
+deploy-production:
+  extends: .deploy-template
+  tags:
+    - erp-am.prod
+  environment:
+    name: production
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+
+# ==============================================================
+# DEVELOP (nhánh `develop`) — API :5094, FE :5095, DB erp_am_dev
+# ==============================================================
+build-api-develop:
+  extends: .build-template
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+  script:
+    - echo "Building API Image (develop)..."
+    - export REG_IMAGE=${CI_REGISTRY_IMAGE:-erp-am-local-registry}
+    - cd api
+    - docker build -t $REG_IMAGE/api:develop-$CI_COMMIT_SHORT_SHA -t $REG_IMAGE/api:develop .
+    - if [ -n "$CI_REGISTRY_IMAGE" ]; then docker push $REG_IMAGE/api:develop-$CI_COMMIT_SHORT_SHA; fi
+    - if [ -n "$CI_REGISTRY_IMAGE" ]; then docker push $REG_IMAGE/api:develop; fi
+
+build-web-develop:
+  extends: .build-template
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+  script:
+    - echo "Building Web Image (develop)..."
+    - export REG_IMAGE=${CI_REGISTRY_IMAGE:-erp-am-local-registry}
+    - cd web
+    - docker build -t $REG_IMAGE/web:develop-$CI_COMMIT_SHORT_SHA -t $REG_IMAGE/web:develop .
+    - if [ -n "$CI_REGISTRY_IMAGE" ]; then docker push $REG_IMAGE/web:develop-$CI_COMMIT_SHORT_SHA; fi
+    - if [ -n "$CI_REGISTRY_IMAGE" ]; then docker push $REG_IMAGE/web:develop; fi
+
+deploy-develop:
+  extends: .deploy-template
+  tags:
+    - erp-am.dev
+  environment:
+    name: develop
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      when: manual
+  script:
+    - echo "Deploying to $CI_ENVIRONMENT_NAME..."
+    - export CI_REGISTRY_IMAGE=${CI_REGISTRY_IMAGE:-erp-am-local-registry}
+    - if [ "$CI_REGISTRY_IMAGE" != "erp-am-local-registry" ]; then docker-compose -f docker-compose.develop.yml -p erp-am-dev pull; fi
+    - docker-compose -f docker-compose.develop.yml -p erp-am-dev up -d

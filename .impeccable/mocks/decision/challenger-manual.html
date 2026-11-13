@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+  body { width: 1440px; height: 900px; overflow: hidden; background: #0f234a; display: flex; padding: 24px 0 24px 24px; }
+  .sheet { flex: 1; background: rgba(255,255,255,0.97); border-radius: 14px 0 0 14px; padding: 32px; display: flex; flex-direction: column; gap: 22px; box-shadow: 8px 0 0 #0a1733; }
+  .tab-rail { width: 110px; display: flex; flex-direction: column; gap: 6px; padding-right: 16px; }
+  .tab { padding: 24px 12px; border-radius: 0 12px 12px 0; color: #fff; font-weight: 700; font-size: 13px; writing-mode: vertical-rl; display: flex; align-items: center; justify-content: center; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { border: 2px solid #0f234a; border-radius: 10px; padding: 20px; }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <div style="font-size:30px;font-weight:800;color:#0f234a">PHÂN KHU 01 // BÁO ĐỘNG ĐỎ & QUỸ NGÀY CÔNG DỰ ÁN</div>
+    <div class="grid">
+      <div class="card" style="background:#fff1f2;border-color:#e11d48">
+        <div style="font-size:12px;font-weight:700;color:#e11d48">PHIẾU BÁO ĐỘNG MANDAY</div>
+        <div style="font-size:32px;font-weight:800;color:#be123c;margin-top:8px">2 Dự án lố Target</div>
+      </div>
+      <div class="card" style="background:#fffbeb;border-color:#d97706">
+        <div style="font-size:12px;font-weight:700;color:#b45309">CẦN ĐÒI TIỀN HÔM NAY</div>
+        <div style="font-size:32px;font-weight:800;color:#92400e;margin-top:8px">485.000.000 ₫</div>
+      </div>
+      <div class="card" style="background:#ecfdf5;border-color:#059669">
+        <div style="font-size:12px;font-weight:700;color:#047857">THƯỞNG HIỆU SUẤT 50/50</div>
+        <div style="font-size:32px;font-weight:800;color:#065f46;margin-top:8px">+92.500.000 ₫</div>
+      </div>
+    </div>
+    <div style="border-top:2px solid #0f234a;padding-top:20px;font-size:24px;font-weight:700;color:#0f234a">
+      Bảng Tờ Rời Đối Soát Từng Hợp Đồng & Lịch Sử Hỗ Trợ 0đ
+    </div>
+  </div>
+  <div class="tab-rail">
+    <div class="tab" style="height:260px;background:#e11d48">1. BÁO ĐỘNG (5)</div>
+    <div class="tab" style="height:220px;background:#d97706">2. THU NỢ & VAT</div>
+    <div class="tab" style="height:180px;background:#059669">3. SỔ MANDAY</div>
+    <div class="tab" style="height:140px;background:#475569">4. TẠM ỨNG AM</div>
+  </div>
+</body>
+</html>
+

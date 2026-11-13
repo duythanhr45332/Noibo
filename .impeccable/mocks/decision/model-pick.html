@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+  body { width: 1440px; height: 900px; overflow: hidden; background: #f8fafc; color: #0f172a; display: flex; }
+  .sidebar { width: 240px; background: #0f172a; color: #f8fafc; padding: 24px 18px; display: flex; flex-direction: column; gap: 20px; }
+  .logo { font-size: 22px; font-weight: 800; color: #fff; }
+  .nav-item { padding: 10px 12px; border-radius: 8px; font-size: 13px; color: #94a3b8; }
+  .nav-item.active { background: #1e293b; color: #fff; font-weight: 600; }
+  .content { flex: 1; padding: 28px 36px; display: flex; flex-direction: column; gap: 22px; }
+  .top-row { display: flex; justify-content: space-between; align-items: flex-end; }
+  .title { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  .triage-strip { display: grid; grid-template-columns: repeat(3, 1fr); background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+  .triage-cell { padding: 18px 24px; border-right: 1px solid #e2e8f0; }
+  .triage-val { font-size: 34px; font-weight: 800; margin-top: 6px; }
+  .workspace { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; flex: 1; }
+  .panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+  .panel-h { font-size: 22px; font-weight: 700; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px; }
+  .proj-item { padding: 14px 0; border-bottom: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 10px; }
+  .bullet-bar { height: 14px; background: #e2e8f0; border-radius: 99px; overflow: hidden; display: flex; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="logo">ERP-AM Cockpit</div>
+    <div class="nav-item active">● Triage & Ngân sách</div>
+    <div class="nav-item">Việc cần làm hôm nay</div>
+    <div class="nav-item">Danh mục Hợp đồng</div>
+    <div class="nav-item">ĐNTT & Hóa đơn VAT</div>
+    <div class="nav-item">Quỹ Tạm ứng AM</div>
+  </div>
+  <div class="content">
+    <div class="top-row">
+      <div class="title">Buồng Lái Kiểm Soát Ngày Công & Công Nợ Hôm Nay</div>
+    </div>
+    <div class="triage-strip">
+      <div class="triage-cell">
+        <div style="font-size:12px;color:#dc2626;font-weight:700">1. CẢNH BÁO CHẢY MÁU MANDAY</div>
+        <div class="triage-val" style="color:#dc2626">2 Hợp đồng vượt Target</div>
+      </div>
+      <div class="triage-cell">
+        <div style="font-size:12px;color:#2563eb;font-weight:700">2. ĐỢT THANH TOÁN CẦN ĐÒI NGAY</div>
+        <div class="triage-val" style="color:#0f172a">485.000.000 ₫</div>
+      </div>
+      <div class="triage-cell">
+        <div style="font-size:12px;color:#059669;font-weight:700">3. QUỸ THƯỞNG HIỆU SUẤT 50/50</div>
+        <div class="triage-val" style="color:#059669">+92.500.000 ₫</div>
+      </div>
+    </div>
+    <div class="workspace">
+      <div class="panel">
+        <div class="panel-h">Sổ Cái Ngân Sách 4 Chỉ Số (Bullet Progress)</div>
+        <div class="proj-item">
+          <div style="display:flex;justify-content:space-between"><strong style="font-size:22px">ERP Logistics Tân Cảng</strong><span style="color:#dc2626;font-weight:700">86 / 80 Target (Limit 90 MD)</span></div>
+          <div class="bullet-bar"><div style="width:88%;background:#dc2626"></div></div>
+        </div>
+        <div class="proj-item">
+          <div style="display:flex;justify-content:space-between"><strong style="font-size:22px">Cổng Học Phí EduPay</strong><span style="color:#059669;font-weight:700">38 / 50 Target (Limit 65 MD)</span></div>
+          <div class="bullet-bar"><div style="width:58%;background:#2563eb"></div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-h">Timeline Bằng Chứng 0đ & Phụ Lục</div>
+        <div style="font-size:22px;font-weight:600;color:#334155">Sao chép 1 chạm gửi Zalo đòi phụ lục Upsell</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+

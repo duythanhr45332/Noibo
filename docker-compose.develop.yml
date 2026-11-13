@@ -1,0 +1,41 @@
+# ==============================================================
+# Môi trường DEVELOP (nhánh `develop` - ERP-AM)
+# - API: host port 5094  |  FE: host port 5095
+# - DB riêng: erp_am_dev (cấu hình qua GitLab CI/CD Variables, scope `develop`)
+# ==============================================================
+version: '3.8'
+
+services:
+  api:
+    image: ${CI_REGISTRY_IMAGE}/api:develop
+    container_name: erp_am_api_develop
+    restart: always
+    ports:
+      - "5094:5092"
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=5092
+      - DB_HOST=${DB_HOST:?DB_HOST is required}
+      - DB_PORT=${DB_PORT:?DB_PORT is required}
+      - DB_USER=${DB_USER:?DB_USER is required}
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
+      - DB_NAME=${DB_NAME:?DB_NAME is required}
+      - JWT_SECRET=${JWT_SECRET}
+    volumes:
+      - erp_am_dev_uploads:/app/uploads
+
+  web:
+    image: ${CI_REGISTRY_IMAGE}/web:develop
+    container_name: erp_am_web_develop
+    restart: always
+    ports:
+      - "5095:5093"
+    environment:
+      - NODE_ENV=production
+      - HOSTNAME=0.0.0.0
+      - PORT=5093
+      - INTERNAL_API_URL=http://api:5092
+
+volumes:
+  erp_am_dev_uploads:

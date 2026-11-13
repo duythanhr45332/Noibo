@@ -1,0 +1,248 @@
+{
+  "title": "Chọn Định Hướng Giao Diện Mới Cho ERP-AM (Home & Workspace Shell)",
+  "question": "Dựa trên nhu cầu phát hiện ngay dự án 'chảy máu' ngày công & công nợ đến hạn trong 5 giây đầu, hãy chọn phương án UI bạn muốn triển khai (hoặc bấm Re-roll để xem bộ khác):",
+  "options": [
+    {
+      "id": "assigned",
+      "kind": "assigned",
+      "label": "Admiralty Tidal & Clearance Chart (Bản Đồ Thủy Triều Ngân Sách)",
+      "kicker": "THE ROLL",
+      "lineage": "Bản đồ thủy triều hàng hải & Bảng điều phối cảng (Admiralty Charts)",
+      "thesis": "Biến bảng CRUD khô khan thành Buồng lái Thủy triều: thấy ngay mực nước ngày công chạm vạch Đỏ và cổng thu tiền mở khóa.",
+      "palette": [
+        "#0f234a",
+        "#f4f6f9",
+        "#e11d48",
+        "#0d9488"
+      ],
+      "materials": [
+        "Navy Shell Header",
+        "Tidal Burn Gauge Bars",
+        "1px Hairline Ledger"
+      ],
+      "viewport": "Top Shell Navy đậm + Dải 3 Thẻ Khẩn Cấp (Dự án âm Manday, Đợt cần đòi tiền ngay, Bằng chứng 0đ) + Bảng Sổ Cái có Thanh Thước Thủy Triều 4 mốc (Limit/Target/Est/Real) trực quan trên từng hợp đồng.",
+      "risk": "Cần giữ thanh thước thủy triều gọn trong 1 dòng để không làm cao dòng bảng.",
+      "raised": [
+        {
+          "from": "variable-font-specimen",
+          "raise": "Phóng lớn chỉ số ngày công âm/dương (Surplus/Deficit MD) bằng tỷ lệ chữ đại cảnh đối lập nhãn monospace nhỏ."
+        },
+        {
+          "from": "pop-culture-shelf-streaming-title-card-wall",
+          "raise": "Dòng dự án đang chọn tự động nâng nổi và bung thanh thao tác 1 chạm (Log MD / Đòi tiền) ngay tại chỗ."
+        },
+        {
+          "from": "vernacular-ephemera-cassette-j-card",
+          "raise": "Tách cứng Mặt A (Quỹ Ngày Công Sản Xuất) và Mặt B (Dòng Tiền & Hỗ Trợ 0đ) đối xứng rõ ràng."
+        }
+      ],
+      "html": ".impeccable/mocks/decision/assigned.html",
+      "comp": ".impeccable/mocks/decision/assigned.webp"
+    },
+    {
+      "id": "model-pick",
+      "kind": "pick",
+      "label": "Swiss Financial Triage Cockpit (Buồng Lái Tài Chính Chuẩn Productive / Linear)",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "Báo cáo tài chính Thụy Sĩ kết hợp B2B SaaS hiện đại (Productive.io / Stripe / Linear)",
+      "thesis": "Chia màn hình thành 2 tầng rõ rệt: Tầng Triage Khẩn Cấp 5-giây ở trên cùng và Sổ Cái Phân Tích Thanh Nhiệt (Bullet Chart) ở dưới.",
+      "palette": [
+        "#0f172a",
+        "#ffffff",
+        "#2563eb",
+        "#dc2626"
+      ],
+      "materials": [
+        "Segmented KPI Strip",
+        "Inline Bullet Progress",
+        "Split Master-Detail"
+      ],
+      "viewport": "Dải Triage 3 cột báo động đỏ/vàng trên đỉnh + Bảng dự án kèm thanh Bullet-Chart lồng 3 ngưỡng (Real/Target/Limit) + Cột phải hiển thị Sổ Bằng Chứng 0đ dạng Timeline.",
+      "risk": "Phổ biến trong nhóm phần mềm B2B hiện đại nhưng cực kỳ an toàn và hiệu quả.",
+      "html": ".impeccable/mocks/decision/model-pick.html",
+      "comp": ".impeccable/mocks/decision/model-pick.webp"
+    },
+    {
+      "id": "challenger-console",
+      "kind": "challenger",
+      "catalogId": "digital-design-canon-dark-first-developer-console",
+      "label": "Dark-First Command Console (Trạm Chỉ Huy Nền Tối Mật Độ Cao)",
+      "verdict": "competitive",
+      "lineage": "Trạm giám sát tài chính / Developer Console nền Graphite",
+      "thesis": "Nền than chì phẳng phân tách bằng đường chỉ 1px; chỉ những dự án chảy máu ngày công hoặc quá hạn công nợ mới phát sáng màu cảnh báo.",
+      "palette": [
+        "#111318",
+        "#1c2029",
+        "#10b981",
+        "#f43f5e"
+      ],
+      "materials": [
+        "Graphite 1px Grid",
+        "Syntax-State Accents",
+        "Monospace Readouts"
+      ],
+      "viewport": "Màn hình chia các ô Panel 1px liền khít: Panel Báo động Đỏ bên trái, Panel Quỹ Manday & Lộ trình Mốc ở giữa, Panel Bằng chứng 0đ bên phải.",
+      "case": "Giúp cảnh báo Đỏ/Vàng nổi bật tức thì trong 1 giây nhờ nền tối trầm, rất hợp cho Sếp & AM thích phong cách Bloomberg/Linear Dark.",
+      "risk": "Nền tối toàn phần có thể lạ mắt với nhân sự kế toán quen nhìn giấy trắng.",
+      "html": ".impeccable/mocks/decision/challenger-console.html",
+      "comp": ".impeccable/mocks/decision/challenger-console.webp",
+      "hero": "https://impeccable.style/worlds/cards/digital-design-canon-dark-first-developer-console-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/digital-design-canon-dark-first-developer-console.webp"
+    },
+    {
+      "id": "challenger-manual",
+      "kind": "challenger",
+      "catalogId": "rw-manual-acetate-tab-board",
+      "label": "Stepped Tab Ledger Binder (Sổ Cái Phân Khu Bậc Thang Màu)",
+      "verdict": "competitive",
+      "lineage": "Sổ cẩm nang kỹ thuật chia vách ngăn màu bậc thang",
+      "thesis": "Mỗi nghiệp vụ (Báo động, Ngày công, Hóa đơn VAT, Tạm ứng AM) là một tấm bìa màu có tai tab bậc thang dọc cạnh màn hình, lật trang tức thì.",
+      "palette": [
+        "#f8fafc",
+        "#0f234a",
+        "#d97706",
+        "#059669"
+      ],
+      "materials": [
+        "Stepped Fore-Edge Tabs",
+        "Translucent Sheet Layer",
+        "Color-Coded Boards"
+      ],
+      "viewport": "Khung làm việc chính đặt trên nền bìa phân màu theo chế độ đang mở, cạnh phải là dải Tab bậc thang có chiều cao tỷ lệ với số việc tồn đọng.",
+      "case": "Giải quyết triệt để cảm giác 'mọi trang nhìn giống hệt nhau' bằng vách ngăn màu định danh từng phân khu.",
+      "risk": "Cần tiết chế độ đậm của nền bìa để không lấn át màu cảnh báo Đỏ/Vàng.",
+      "html": ".impeccable/mocks/decision/challenger-manual.html",
+      "comp": ".impeccable/mocks/decision/challenger-manual.webp",
+      "hero": "https://impeccable.style/worlds/cards/rw-manual-acetate-tab-board-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/rw-manual-acetate-tab-board.webp"
+    },
+    {
+      "id": "challenger-orienteering",
+      "kind": "challenger",
+      "catalogId": "notation-diagram-systems-orienteering-map",
+      "label": "Milestone Course & Checkpoint Map (Bản Đồ Chặng Nghiệm Thu)",
+      "verdict": "competitive",
+      "lineage": "Bản đồ định hướng chặng đua & ký hiệu kiểm soát (Orienteering Map)",
+      "thesis": "Hiển thị mỗi hợp đồng như một đường đua qua các trạm M1 → M2 → M3; trạm nào nghẽn ngày công hoặc kẹt thanh toán sẽ hiện vòng tròn tím/đỏ.",
+      "palette": [
+        "#ffffff",
+        "#f3f4ed",
+        "#7c3aed",
+        "#b45309"
+      ],
+      "materials": [
+        "Checkpoint Node Line",
+        "Course Purple Vector",
+        "Legend Symbol Table"
+      ],
+      "viewport": "Mỗi hợp đồng hiển thị sơ đồ dây chuyền các trạm Mốc bàn giao nối liền với Cổng thu tiền VAT thay vì chỉ hiện các con số rời rạc.",
+      "case": "Trực quan hóa cực tốt mối liên kết giữa Mốc bàn giao (M1, M2) và Đợt thu tiền.",
+      "risk": "Chiếm nhiều chiều ngang hơn bảng số liệu truyền thống.",
+      "html": ".impeccable/mocks/decision/challenger-orienteering.html",
+      "comp": ".impeccable/mocks/decision/challenger-orienteering.webp",
+      "hero": "https://impeccable.style/worlds/cards/notation-diagram-systems-orienteering-map-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/notation-diagram-systems-orienteering-map.webp"
+    },
+    {
+      "id": "challenger-Specimen",
+      "kind": "challenger",
+      "catalogId": "variable-font-specimen",
+      "label": "Variable Type Specimen",
+      "verdict": "declined",
+      "lineage": "Bảng thử nghiệm chữ biến thiên",
+      "thesis": "Tập trung hoàn toàn vào kích thước chữ khổng lồ và thanh trượt biến thiên.",
+      "palette": [
+        "#ffffff",
+        "#0f172a",
+        "#e11d48"
+      ],
+      "materials": [
+        "Giant Numerals",
+        "Monospace Coordinates"
+      ],
+      "viewport": "Con số tổng quỹ ngày công chiếm trọn nửa trên màn hình.",
+      "case": "Không đủ mật độ hiển thị cho bảng đối soát nhiều hợp đồng cùng lúc.",
+      "risk": "Lãng phí diện tích màn hình làm việc.",
+      "kept": "Tỷ lệ chữ số KPI tương phản mạnh với nhãn monospace nhỏ.",
+      "hero": "https://impeccable.style/worlds/cards/variable-font-specimen-hero.webp"
+    },
+    {
+      "id": "challenger-streaming",
+      "kind": "challenger",
+      "catalogId": "pop-culture-shelf-streaming-title-card-wall",
+      "label": "Streaming Poster Wall",
+      "verdict": "declined",
+      "lineage": "Tường phim cuộn ngang kiểu Netflix",
+      "thesis": "Các dự án xếp thành hàng ngang và phóng to khi di chuột.",
+      "palette": [
+        "#0f172a",
+        "#1e293b",
+        "#38bdf8"
+      ],
+      "materials": [
+        "Horizontal Poster Rails",
+        "Focus Scale"
+      ],
+      "viewport": "Các hàng thẻ dự án cuộn ngang.",
+      "case": "Cuộn ngang làm AM không thể so sánh cột số tiền và ngày công giữa các hợp đồng.",
+      "risk": "Khó đối soát số liệu kế toán.",
+      "kept": "Hiệu ứng làm nổi bật dòng dự án đang chọn kèm nút hành động tức thì.",
+      "hero": "https://impeccable.style/worlds/cards/pop-culture-shelf-streaming-title-card-wall-hero.webp"
+    },
+    {
+      "id": "challenger-cassette",
+      "kind": "challenger",
+      "catalogId": "vernacular-ephemera-cassette-j-card",
+      "label": "Cassette J-Card",
+      "verdict": "declined",
+      "lineage": "Bìa băng cassette 2 mặt Side A / Side B",
+      "thesis": "Chia danh sách thành Mặt A và Mặt B với thời lượng giới hạn.",
+      "palette": [
+        "#ffffff",
+        "#1d4ed8",
+        "#dc2626"
+      ],
+      "materials": [
+        "Ruled Tracklist",
+        "Side A / B Flip"
+      ],
+      "viewport": "Tờ bìa gấp đôi hiển thị giới hạn thời lượng từng mặt.",
+      "case": "Ẩn dụ băng nhạc không khớp với ngữ cảnh kế toán B2B.",
+      "risk": "Trông giống ứng dụng cá nhân hơn ERP.",
+      "kept": "Sự phân tách cứng giữa Mặt A (Ngân sách ngày công) và Mặt B (Dòng tiền & Hỗ trợ 0đ).",
+      "hero": "https://impeccable.style/worlds/cards/vernacular-ephemera-cassette-j-card-hero.webp"
+    }
+  ],
+  "reroll": {
+    "registers": [
+      "safer",
+      "bolder"
+    ]
+  },
+  "buildPath": {
+    "value": "code",
+    "toggle": false
+  },
+  "canon": true,
+  "canonCard": {
+    "kind": "canon",
+    "label": "Chuẩn B2B SaaS Hiện Đại (Clean Enterprise Dashboard)",
+    "thesis": "Giao diện B2B SaaS chuẩn mực với KPI Cards, thanh tiến độ màu và bảng dữ liệu sạch sẽ.",
+    "palette": [
+      "#ffffff",
+      "#0f172a",
+      "#2563eb",
+      "#10b981"
+    ],
+    "materials": [
+      "Clean KPI Grid",
+      "Status Pills",
+      "Standard Data Table"
+    ],
+    "viewport": "4 thẻ KPI tổng quan trên đầu + Bảng danh sách dự án có thanh progress bar.",
+    "risk": "An toàn, dễ dùng nhưng ít dấu ấn riêng biệt.",
+    "html": ".impeccable/mocks/decision/canon.html",
+    "comp": ".impeccable/mocks/decision/canon.webp"
+  },
+  "steer": true
+}

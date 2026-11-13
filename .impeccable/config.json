@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-10-30T03:14:03.706Z",
+        "reason": "Approved primary UI font for Vietnamese ERP-AM"
+      }
+    ]
+  }
+}
