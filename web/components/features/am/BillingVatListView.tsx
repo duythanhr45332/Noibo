@@ -632,6 +632,9 @@ export function BillingVatListView() {
                   4. Thực tế tiêu
                 </th>
                 <th className="py-3 px-3 text-right font-medium">
+                  Hỗ trợ 0đ (1:1)
+                </th>
+                <th className="py-3 px-3 text-right font-medium">
                   Dôi dư / Vượt trần
                 </th>
                 {roleView !== "PM" && (
@@ -682,6 +685,15 @@ export function BillingVatListView() {
                     <td className="py-3.5 px-3 text-right tabular-nums font-semibold text-slate-900">
                       {four.realMandays} ngày
                     </td>
+                    <td className="py-3.5 px-3 text-right tabular-nums text-xs">
+                      {four.supportMandays > 0 ? (
+                        <span className="rounded bg-blue-50 px-2 py-0.5 font-medium text-blue-700 border border-blue-200/70">
+                          {four.supportMandays} ngày (Tách riêng)
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">0 ngày</span>
+                      )}
+                    </td>
                     <td
                       className={cn(
                         "py-3.5 px-3 text-right tabular-nums font-semibold",
@@ -715,7 +727,7 @@ export function BillingVatListView() {
                     <td className="py-3.5 pl-3 pr-5 text-right">
                       {four.bonusUnlockStatus === "UNLOCKED" ? (
                         <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200/70">
-                          ✓ Đã mở khóa
+                          ✓ Đã mở khóa • Chi ngay
                         </span>
                       ) : four.bonusUnlockStatus === "PENDING_PAYMENT" ? (
                         <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">

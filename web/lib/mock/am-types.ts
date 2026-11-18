@@ -88,6 +88,7 @@ export type ScopeExecutionStatus =
 export type CreditLogType =
   | "PERIODIC_CHECK"
   | "FINISH_MILESTONE"
+  | "REOPEN_MILESTONE"
   | "FREE_SUPPORT"
   | "UPSELL_ADDED"
 
@@ -133,6 +134,7 @@ export interface ScopeItem {
   estimatedMandays: number // 3. Estimate: Dự toán kỹ thuật của PM
   handoverEstimatedMandays?: number // Thời gian bàn giao, họp nghiệm thu, HDSD đã tính trong Estimate
   actualMandays?: number // 4. Real: Số Mandays thực tế đã tiêu hao tại Mốc này
+  supportMandays?: number // Cột riêng: Số Mandays Hỗ trợ 0đ (1:1, <= 1 MD Dev/mốc, không trừ vào Real hay thưởng 50/50)
 
   // Trạng thái & Lịch sử Log Mandays (Audit Log)
   dueDate?: string
@@ -192,8 +194,8 @@ export interface ChangeRequestItem {
   requestedDate: string
   requestedByClientContact: string
   description: string
-  devMandays?: number // Số ngày công của Dev (Quy định hỗ trợ 0đ: Cấm quá 1 ngày công Dev = 3 ngày công thực tế)
-  pmEstimatedMandays: number // Tổng số ngày công thực tế (Tính cả Dev + Test + Bàn giao)
+  devMandays?: number // Số ngày công của Dev (Hỗ trợ 0đ: tỉ lệ 1:1, lũy kế tối đa 1 MD Dev theo từng Mốc)
+  pmEstimatedMandays: number // Tổng số ngày công thực tế (Upsell gồm Dev+Test+BG; Hỗ trợ 0đ theo tỉ lệ 1:1)
   amAllocatedToPmMandays?: number // Số MD AM cấp thêm vào Target của Mốc khi duyệt Upsell
   quotedPriceVnd: number // Giá báo khách (0đ nếu là FREE_SUPPORT)
   vatCategory: VatCategory
@@ -320,6 +322,30 @@ export interface ContractProject {
 /**
  * Helper lấy đủ 4 chỉ số tài chính (Limit / Target / Estimate / Real) của 1 Mốc bàn giao
  */
+export const FREE_SUPPORT_MAX_MD_PER_MILESTONE = 1
+
+/**
+ * Tính tổng số ngày công Hỗ trợ 0đ (1:1) đã ghi nhận trên một Mốc cụ thể
+ */
+export function getMilestoneFreeSupportUsedMd(
+  contract: Pick<ContractProject, "changeRequests">,
+  scopeId?: string
+): number {
+  if (!scopeId) return 0
+  const sum = (contract.changeRequests || [])
+    .filter(
+      (cr) =>
+        cr.milestoneId === scopeId &&
+        (cr.crType === "FREE_SUPPORT" || cr.status === "APPROVED_FREE_GOODWILL") &&
+        cr.status !== "REJECTED"
+    )
+    .reduce(
+      (acc, cr) => acc + Number(cr.devMandays ?? cr.pmEstimatedMandays ?? 0),
+      0
+    )
+  return Number(sum.toFixed(2))
+}
+
 export function getMilestoneFourMetrics(
   item: ScopeItem,
   contract: ContractProject
@@ -354,8 +380,14 @@ export function getMilestoneFourMetrics(
   // 3. Estimate (Dự toán kỹ thuật của PM)
   const estimateMandays = Number(item.estimatedMandays || 0)
 
-  // 4. Real (Thực tế tiêu hao đã Log)
+  // 4. Real (Thực tế tiêu hao đã Log — không gộp Hỗ trợ 0đ)
   const realMandays = Number(item.actualMandays ?? 0)
+
+  // Cột riêng: Hỗ trợ 0đ (tỉ lệ 1:1, lũy kế <= 1 MD Dev/mốc)
+  const supportMandays =
+    item.supportMandays !== undefined
+      ? Number(item.supportMandays)
+      : getMilestoneFreeSupportUsedMd(contract, item.id)
 
   // Số dư tín dụng còn lại so với Limit (In/Out Account Balance)
   const balanceVsLimitMandays = limitMandays - realMandays
@@ -410,6 +442,7 @@ export function getMilestoneFourMetrics(
     targetMandays,
     estimateMandays,
     realMandays,
+    supportMandays,
     balanceVsLimitMandays,
     balanceVsTargetMandays,
     isOverLimit,
@@ -632,11 +665,18 @@ export function calculateContractMetrics(contract: ContractProject) {
     contract.handover.userGuideAndVideoDelivered &&
     contract.handover.signedAcceptanceScanUploaded
 
+  const amExpensesList = contract.amExpenses || []
+  const unreimbursedExpensesCount = amExpensesList.filter(
+    (exp) => exp.status !== "REIMBURSED"
+  ).length
+  const isAllAmExpensesReimbursed = unreimbursedExpensesCount === 0
+
   const canCloseProject =
     scopeAcceptancePercent === 100 &&
     isHandoverComplete &&
     isAllInstallmentsPaid &&
-    isAllVatIssued
+    isAllVatIssued &&
+    isAllAmExpensesReimbursed
 
   // Cơ chế Phân bổ thưởng dôi dư chuẩn theo yêu cầu Sếp:
   // Nếu làm thực tế (Real) nhỏ hơn Limit -> Dôi dư ra tiền/mandays:
@@ -682,7 +722,6 @@ export function calculateContractMetrics(contract: ContractProject) {
 
   // Tính Sổ Tạm Ứng & Chi Phí Công Tác AM (Taxi, Ship, Tiếp khách... - Độc lập với Quỹ Credit)
   const amAdvanceVnd = Number(contract.amAdvanceAmountVnd || 0)
-  const amExpensesList = contract.amExpenses || []
   const amTotalSpentVnd = amExpensesList.reduce(
     (sum, exp) => sum + Number(exp.amountVnd || 0),
     0
@@ -704,20 +743,22 @@ export function calculateContractMetrics(contract: ContractProject) {
     riskReserveAmount - overBudgetLossVnd
   )
 
-  // Thống kê Hỗ trợ 0 đồng (Free Support) để AM làm bằng chứng đàm phán với khách
+  // Thống kê Hỗ trợ 0 đồng (Free Support 1:1, tách cột riêng theo từng Mốc)
   const freeSupportCrs = contract.changeRequests.filter(
     (cr) =>
-      cr.crType === "FREE_SUPPORT" || cr.status === "APPROVED_FREE_GOODWILL"
+      (cr.crType === "FREE_SUPPORT" || cr.status === "APPROVED_FREE_GOODWILL") &&
+      cr.status !== "REJECTED"
   )
   const totalFreeSupportCount = freeSupportCrs.length
-  const totalFreeSupportDevMd = freeSupportCrs.reduce(
-    (s, cr) => s + Number(cr.devMandays ?? Math.ceil(cr.pmEstimatedMandays / 3)),
-    0
+  const totalFreeSupportDevMd = Number(
+    freeSupportCrs
+      .reduce(
+        (s, cr) => s + Number(cr.devMandays ?? cr.pmEstimatedMandays ?? 0),
+        0
+      )
+      .toFixed(2)
   )
-  const totalFreeSupportRealMd = freeSupportCrs.reduce(
-    (s, cr) => s + Number(cr.pmEstimatedMandays || 0),
-    0
-  )
+  const totalFreeSupportRealMd = totalFreeSupportDevMd
 
   // Tính số ngày kể từ lần check Mandays gần nhất (để nhắc việc AM nếu quá 3-5 ngày chưa cập nhật)
   const todayRef = new Date("2026-10-29T10:00:00+07:00")
@@ -850,9 +891,20 @@ export function calculateContractMetrics(contract: ContractProject) {
     )
   }
   if (contract.phase === "POST_PROJECT" && !canCloseProject) {
-    autoBlockers.push(
-      `Chờ Finish đủ các Mốc (${acceptedScopeCount}/${totalScopeCount}) & xuất HĐ VAT để đóng dự án`
-    )
+    const missingCloseParts: string[] = []
+    if (scopeAcceptancePercent < 100) {
+      missingCloseParts.push(`Finish Mốc (${acceptedScopeCount}/${totalScopeCount})`)
+    }
+    if (!isHandoverComplete) {
+      missingCloseParts.push("Handover 3/3")
+    }
+    if (!isAllInstallmentsPaid || !isAllVatIssued) {
+      missingCloseParts.push("Thu đủ PAID & xuất HĐ VAT")
+    }
+    if (!isAllAmExpensesReimbursed) {
+      missingCloseParts.push(`${unreimbursedExpensesCount} khoản chi AM chưa REIMBURSED`)
+    }
+    autoBlockers.push(`Chờ ${missingCloseParts.join(", ")} để đóng dự án`)
   }
 
   const synthesizedActionBlocker =
@@ -897,6 +949,8 @@ export function calculateContractMetrics(contract: ContractProject) {
     isAllInstallmentsPaid,
     isAllVatIssued,
     isHandoverComplete,
+    unreimbursedExpensesCount,
+    isAllAmExpensesReimbursed,
     canCloseProject,
     surplusMandays,
     surplusValueVnd,

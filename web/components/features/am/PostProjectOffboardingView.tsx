@@ -182,8 +182,8 @@ Email nhận HĐ: ${customerObj.accountingContact.email}
         </div>
       )}
 
-      {/* 4 Điều kiện mở khóa (Gatekeepers) tối giản trên 1 hàng */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 5 Điều kiện mở khóa (Gatekeepers) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           {
             label: "1. Nghiệm thu Mốc Bàn Giao 100%",
@@ -213,6 +213,13 @@ Email nhận HĐ: ${customerObj.accountingContact.email}
             sub: metrics.isAllVatIssued
               ? "Đã lưu đủ Số HĐ & File VAT"
               : "Cần nhập Số HĐ & Link file VAT",
+          },
+          {
+            label: "5. Hoàn ứng Chi phí AM 100%",
+            done: metrics.isAllAmExpensesReimbursed,
+            sub: metrics.isAllAmExpensesReimbursed
+              ? "Đã REIMBURSED toàn bộ chứng từ AM"
+              : `Còn ${metrics.unreimbursedExpensesCount} khoản chưa REIMBURSED`,
           },
         ].map((gate, i) => (
           <Card key={i} className="shadow-none border bg-card">

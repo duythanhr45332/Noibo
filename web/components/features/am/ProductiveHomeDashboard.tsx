@@ -300,7 +300,7 @@ export function ProductiveHomeDashboard() {
     )
     const lines = freeCrs.map(
       (cr, idx) =>
-        `${idx + 1}. ${cr.title} (${cr.requestedDate}): ${cr.devMandays || 1} ngày lập trình = ${cr.pmEstimatedMandays} ngày công thực tế (Miễn phí 0đ)`
+        `${idx + 1}. ${cr.title} (${cr.requestedDate}): ${cr.devMandays ?? cr.pmEstimatedMandays} MD hỗ trợ 0đ (1:1 • Tách cột riêng)`
     )
     const body = `Kính gửi Quý khách hàng ${contract.customerName},\nDự án: ${contract.projectName} (${contract.contractCode})\n\nTrong quá trình triển khai vừa qua, bên em đã ưu tiên hỗ trợ miễn phí (0 đồng) cho Quý khách ${freeCrs.length} hạng mục phát sinh ngoài phạm vi hợp đồng (tổng cộng ${totalRealDays} ngày công thực tế):\n${lines.join("\n")}\n\nRất mong Anh/Chị hỗ trợ bên em hoàn tất nghiệm thu / thanh toán đợt tiếp theo và ký phụ lục cho các tính năng mở rộng lớn. Trân trọng cảm ơn Anh/Chị!`
     navigator.clipboard?.writeText(body)
@@ -904,7 +904,7 @@ export function ProductiveHomeDashboard() {
                                   </div>
                                   <div className="text-slate-500">
                                     {isFree
-                                      ? `${cr.devMandays || 1} ngày lập trình = ${cr.pmEstimatedMandays} ngày thực tế`
+                                      ? `${cr.devMandays ?? cr.pmEstimatedMandays} MD hỗ trợ 0đ (1:1 • Cột riêng)`
                                       : `+${cr.pmEstimatedMandays} ngày • ${roleView === "PM" ? "Đã ẩn giá" : formatMoney(cr.quotedPriceVnd)}`}
                                   </div>
                                 </div>

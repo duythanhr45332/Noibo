@@ -10,6 +10,7 @@ import {
   IconLock,
   IconLockOpen,
   IconPlus,
+  IconRefresh,
   IconTag,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
@@ -50,7 +51,9 @@ import {
   calculateContractMetrics,
   ChangeRequestType,
   evaluateKickoffChecklist,
+  FREE_SUPPORT_MAX_MD_PER_MILESTONE,
   getMilestoneFourMetrics,
+  getMilestoneFreeSupportUsedMd,
   ScopeItem,
   VatCategory,
 } from "@/lib/mock/am-types"
@@ -82,6 +85,7 @@ export function ContractWorkspaceView() {
     formatMoney,
     logMilestoneMandays,
     finishMilestone,
+    reopenMilestone,
     addScopeItem,
     updateScopeItem,
     updateInstallment,
@@ -148,9 +152,13 @@ export function ContractWorkspaceView() {
   const [addCrMode, setAddCrMode] = React.useState(false)
   const [crType, setCrType] = React.useState<ChangeRequestType>("FREE_SUPPORT")
   const [crTitle, setCrTitle] = React.useState("")
-  const [crDevMd, setCrDevMd] = React.useState("1")
+  const [crDevMd, setCrDevMd] = React.useState("0.5")
   const [crTargetMd, setCrTargetMd] = React.useState("1")
   const [crQuoteVnd, setCrQuoteVnd] = React.useState("15000000")
+
+  // State Mở lại Mốc (Reopen Milestone)
+  const [reopenModeOpen, setReopenModeOpen] = React.useState(false)
+  const [reopenReason, setReopenReason] = React.useState("")
 
   const activeScope = React.useMemo(
     () => contract.scopeItems.find((s) => s.id === selectedScopeId) || null,
@@ -178,6 +186,8 @@ export function ContractWorkspaceView() {
     setLogModeOpen(false)
     setEditScopeMode(false)
     setAddCrMode(false)
+    setReopenModeOpen(false)
+    setReopenReason("")
     setEditPic(item.ownerPic || contract.pmOwner)
     setEditDueDate(item.dueDate || "2026-11-30")
     setEditLimitMd(String(four.limitMandays))
@@ -269,11 +279,24 @@ export function ContractWorkspaceView() {
       return
     }
     const devMd = Number(crDevMd) || 0
-    if (crType === "FREE_SUPPORT" && devMd > 1) {
-      toast.error(
-        "Quy tắc cứng: Hỗ trợ 0đ (Thiện chí) chỉ áp dụng khi <= 1 MD Dev! Quá 1 MD bắt buộc chuyển sang Upsell tính phí."
-      )
+    if (devMd <= 0) {
+      toast.error("Vui lòng nhập khối lượng ngày công > 0")
       return
+    }
+    if (crType === "FREE_SUPPORT") {
+      const usedFreeOnScope = getMilestoneFreeSupportUsedMd(
+        contract,
+        activeScope.id
+      )
+      if (
+        usedFreeOnScope + devMd >
+        FREE_SUPPORT_MAX_MD_PER_MILESTONE + 1e-6
+      ) {
+        toast.error(
+          `Mốc ${activeScope.code} đã dùng ${usedFreeOnScope}/${FREE_SUPPORT_MAX_MD_PER_MILESTONE} ngày Hỗ trợ 0đ! Phần vượt quá 1 MD Dev/mốc bắt buộc chuyển sang Phụ lục thu phí (Upsell).`
+        )
+        return
+      }
     }
 
     addChangeRequest(contract.id, {
@@ -296,7 +319,7 @@ export function ContractWorkspaceView() {
         crType === "FREE_SUPPORT" ? "APPROVED_FREE_GOODWILL" : "AM_QUOTING",
       amNegotiationNote:
         crType === "FREE_SUPPORT"
-          ? "Hỗ trợ thiện chí 0đ (<= 1 MD Dev) giữ quan hệ khách hàng"
+          ? "Hỗ trợ thiện chí 0đ (1:1 • lũy kế ≤ 1 MD Dev/mốc, tách cột riêng)"
           : "Báo giá Upsell bổ sung ngân sách & Limit cho Mốc",
     })
     setCrTitle("")
@@ -477,7 +500,7 @@ export function ContractWorkspaceView() {
               )}
 
               <div className="text-slate-500">
-                Hỗ trợ 0đ (≤ 1 ngày):{" "}
+                Hỗ trợ 0đ (1:1 • Cột riêng):{" "}
                 <strong className="font-semibold text-slate-900 tabular-nums">
                   {metrics.totalFreeSupportRealMd} ngày ({metrics.totalFreeSupportCount} lần)
                 </strong>
@@ -497,6 +520,9 @@ export function ContractWorkspaceView() {
                   <th className="py-3 px-3 font-medium">Hạn bàn giao</th>
                   <th className="py-3 px-3 text-right font-medium">
                     Tiến độ Ngày công (Thực tiêu / Trần)
+                  </th>
+                  <th className="py-3 px-3 text-right font-medium">
+                    Hỗ trợ 0đ (1:1)
                   </th>
                   <th className="py-3 px-3 text-right font-medium">
                     Số dư Quỹ
@@ -654,6 +680,25 @@ export function ContractWorkspaceView() {
                         </div>
                       </td>
 
+                      {/* 6b. Cột riêng: Hỗ trợ 0đ (1:1, tối đa 1 MD Dev/mốc) */}
+                      <td className="py-3.5 px-3 text-right tabular-nums">
+                        {four.supportMandays > 0 ? (
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border",
+                              four.supportMandays >=
+                                FREE_SUPPORT_MAX_MD_PER_MILESTONE
+                                ? "bg-amber-50 text-amber-800 border-amber-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200"
+                            )}
+                          >
+                            {four.supportMandays} / {FREE_SUPPORT_MAX_MD_PER_MILESTONE}d
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">0 / {FREE_SUPPORT_MAX_MD_PER_MILESTONE}d</span>
+                        )}
+                      </td>
+
                       {/* 7. Số dư Quỹ */}
                       <td className="py-3.5 px-3 text-right tabular-nums">
                         <span
@@ -723,6 +768,18 @@ export function ContractWorkspaceView() {
               const linkedInst = four.linkedInstallments[0]
               const scopeCrs = contract.changeRequests.filter(
                 (cr) => cr.milestoneId === activeScope.id
+              )
+              const usedFreeOnScope = getMilestoneFreeSupportUsedMd(
+                contract,
+                activeScope.id
+              )
+              const remainingFreeOnScope = Math.max(
+                0,
+                Number(
+                  (FREE_SUPPORT_MAX_MD_PER_MILESTONE - usedFreeOnScope).toFixed(
+                    2
+                  )
+                )
               )
               const isFinished = four.isFinished
 
@@ -797,6 +854,22 @@ export function ContractWorkspaceView() {
                     </div>
                   </div>
 
+                  {/* CỘT RIÊNG: HỖ TRỢ 0Đ THEO MỐC */}
+                  <div className="rounded-lg border border-blue-200/80 bg-blue-50/40 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div>
+                      <span className="font-semibold text-blue-950">
+                        Hỗ trợ 0đ (Cột riêng • Tỉ lệ 1:1):
+                      </span>{" "}
+                      <span className="text-blue-800">
+                        Không trừ vào Thực tế tiêu (Real) / thưởng 50/50
+                      </span>
+                    </div>
+                    <span className="font-mono font-bold text-blue-900 whitespace-nowrap">
+                      {usedFreeOnScope} / {FREE_SUPPORT_MAX_MD_PER_MILESTONE} ngày
+                      (Còn {remainingFreeOnScope}d)
+                    </span>
+                  </div>
+
                   {/* CÁC NÚT HÀNH ĐỘNG CHÍNH */}
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
@@ -808,7 +881,7 @@ export function ContractWorkspaceView() {
                       Cập nhật ngày công định kỳ
                     </Button>
 
-                    {!isFinished && (
+                    {!isFinished ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -824,6 +897,18 @@ export function ContractWorkspaceView() {
                         <IconCheck className="size-3.5" />
                         Chốt hoàn thành Mốc (Chia 50/50)
                       </Button>
+                    ) : (
+                      contract.phase !== "CLOSED" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setReopenModeOpen(!reopenModeOpen)}
+                          className="h-9 px-3.5 text-xs border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 gap-1.5 font-semibold"
+                        >
+                          <IconRefresh className="size-3.5" />
+                          Mở lại Mốc (Reopen)
+                        </Button>
+                      )
                     )}
 
                     <Button
@@ -845,6 +930,54 @@ export function ContractWorkspaceView() {
                       {editScopeMode ? "Đóng sửa chỉ số" : "Sửa 4 chỉ số Mốc"}
                     </Button>
                   </div>
+
+                  {/* Form Mở lại Mốc (Reopen Milestone) */}
+                  {reopenModeOpen && isFinished && contract.phase !== "CLOSED" && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-4 space-y-3 text-xs">
+                      <div className="text-sm font-bold text-amber-950">
+                        Mở lại Mốc {activeScope.code} (Reopen Milestone)
+                      </div>
+                      <p className="text-amber-900">
+                        Chuyển Mốc quay lại trạng thái Đang triển khai để log thêm ngày công xử lý lỗi sau UAT (nếu dự án đang ở giai đoạn Đóng/Bàn giao sẽ tự quay lại Đang triển khai).
+                      </p>
+                      <div>
+                        <Label className="text-xs text-amber-900">
+                          Lý do mở lại Mốc *
+                        </Label>
+                        <Input
+                          value={reopenReason}
+                          onChange={(e) => setReopenReason(e.target.value)}
+                          placeholder="VD: Phát hiện lỗi phát sinh khi khách test UAT thực tế..."
+                          className="h-9 text-sm bg-white mt-1"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() => setReopenModeOpen(false)}
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs bg-amber-700 hover:bg-amber-800 text-white"
+                          onClick={() => {
+                            reopenMilestone(
+                              contract.id,
+                              activeScope.id,
+                              reopenReason
+                            )
+                            setReopenReason("")
+                            setReopenModeOpen(false)
+                          }}
+                        >
+                          Xác nhận Mở lại Mốc
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Form sửa nhanh 4 chỉ số Mốc */}
                   {editScopeMode && (
@@ -1011,7 +1144,11 @@ export function ContractWorkspaceView() {
                           type="button"
                           onClick={() => {
                             setCrType("FREE_SUPPORT")
-                            setCrDevMd("0.5")
+                            setCrDevMd(
+                              remainingFreeOnScope > 0
+                                ? String(Math.min(0.5, remainingFreeOnScope))
+                                : "0.5"
+                            )
                           }}
                           className={cn(
                             "px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors",
@@ -1020,7 +1157,7 @@ export function ContractWorkspaceView() {
                               : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
                           )}
                         >
-                          Hỗ trợ 0đ (≤ 1 ngày)
+                          Hỗ trợ 0đ (1:1 • Còn {remainingFreeOnScope}/{FREE_SUPPORT_MAX_MD_PER_MILESTONE}d)
                         </button>
                         <button
                           type="button"
@@ -1054,11 +1191,13 @@ export function ContractWorkspaceView() {
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <Label className="text-xs text-slate-600">
-                              Khối lượng ước tính (ngày)
+                              {crType === "FREE_SUPPORT"
+                                ? `Ngày công Dev (1:1 • Còn lại tối đa ${remainingFreeOnScope} MD)`
+                                : "Khối lượng ước tính (ngày)"}
                             </Label>
                             <Input
                               type="number"
-                              step="0.5"
+                              step="0.25"
                               value={crDevMd}
                               onChange={(e) => setCrDevMd(e.target.value)}
                               className="h-9 text-sm bg-white mt-1"
@@ -1139,8 +1278,8 @@ export function ContractWorkspaceView() {
                           </div>
                           <div className="text-xs text-slate-600 mt-1">
                             {four.bonusUnlockStatus === "UNLOCKED"
-                              ? "✓ Đã mở khóa (Khách đã thanh toán đợt liên kết)"
-                              : "Mở khóa ngay khi khách thanh toán đợt liên kết"}
+                              ? "✓ Đã mở khóa — Đủ điều kiện chi ngay (Đợt liên kết đã PAID)"
+                              : "Chi ngay 50% thưởng khi Mốc Finish và Đợt liên kết đạt PAID"}
                           </div>
                         </div>
                       </div>
@@ -1219,7 +1358,7 @@ export function ContractWorkspaceView() {
                                 <div className="text-xs text-slate-500 mt-1">
                                   Loại:{" "}
                                   {cr.crType === "FREE_SUPPORT"
-                                    ? "Hỗ trợ 0đ (Thiện chí ≤ 1 ngày)"
+                                    ? "Hỗ trợ 0đ (1:1 • ≤ 1 MD/mốc)"
                                     : "Phụ lục thu phí"}{" "}
                                   • Khối lượng:{" "}
                                   <strong className="text-slate-700">
@@ -1492,15 +1631,76 @@ export function ContractWorkspaceView() {
               </div>
             </label>
 
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5 space-y-2 text-xs">
+              <div className="font-semibold text-slate-900">
+                Điều kiện mở khóa Đóng dự án (Gatekeeper #2)
+              </div>
+              <div className="space-y-1.5">
+                {[
+                  {
+                    ok: metrics.scopeAcceptancePercent === 100,
+                    text: `100% Mốc đã Finish (${metrics.acceptedScopeCount}/${metrics.totalScopeCount})`,
+                  },
+                  {
+                    ok: metrics.isHandoverComplete,
+                    text: `Đủ 3/3 Checklist Bàn giao (${handoverReadyCount}/3)`,
+                  },
+                  {
+                    ok: metrics.isAllInstallmentsPaid,
+                    text: `Thu đủ 100% Đợt thanh toán (${paidInstallmentCount}/${contract.installments.length} PAID)`,
+                  },
+                  {
+                    ok: metrics.isAllVatIssued,
+                    text: "Xuất đủ 100% Hóa đơn VAT (Số HĐ + File)",
+                  },
+                  {
+                    ok: metrics.isAllAmExpensesReimbursed,
+                    text: metrics.isAllAmExpensesReimbursed
+                      ? "Tất toán 100% Sổ chi công tác AM (REIMBURSED)"
+                      : `Còn ${metrics.unreimbursedExpensesCount} khoản chi AM chưa REIMBURSED (chặn đóng)`,
+                  },
+                ].map((cond, idx) => (
+                  <div
+                    key={idx}
+                    className={cn(
+                      "flex items-center gap-2",
+                      cond.ok ? "text-emerald-700" : "text-red-700 font-medium"
+                    )}
+                  >
+                    <span>{cond.ok ? "✓" : "✕"}</span>
+                    <span>{cond.text}</span>
+                  </div>
+                ))}
+              </div>
+              {!metrics.isAllAmExpensesReimbursed && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHandoverDrawerOpen(false)
+                    setActiveScreen("am-expenses")
+                  }}
+                  className="text-xs font-semibold text-primary hover:underline pt-1"
+                >
+                  Mở Sổ Chi Phí AM để Kế toán chốt hoàn ứng →
+                </button>
+              )}
+            </div>
+
             <div className="pt-2">
               <Button
                 size="sm"
-                disabled={contract.phase === "CLOSED"}
+                disabled={
+                  contract.phase === "CLOSED" ||
+                  !metrics.canCloseProject ||
+                  roleView === "PM"
+                }
                 onClick={() => closeProjectAndSettleKpi(contract.id)}
-                className="w-full h-10 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white"
+                className="w-full h-10 text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white disabled:opacity-50"
               >
                 {contract.phase === "CLOSED"
                   ? "✓ Dự án đã đóng & Quyết toán hoàn tất"
+                  : !metrics.canCloseProject
+                  ? "Chưa đủ 5 điều kiện Gatekeeper #2 để Đóng Dự Án"
                   : "Chốt Quyết Toán 50/50 & Đóng Dự Án"}
               </Button>
             </div>

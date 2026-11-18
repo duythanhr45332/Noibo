@@ -4,6 +4,7 @@ import * as React from "react"
 import { toast } from "sonner"
 import {
   AmExpenseItem,
+  calculateContractMetrics,
   calculateTaxBreakdownFromItems,
   ChangeRequestItem,
   ChangeRequestStatus,
@@ -13,7 +14,9 @@ import {
   DemoRoleView,
   formatCompactVnd,
   formatVnd,
+  FREE_SUPPORT_MAX_MD_PER_MILESTONE,
   getMilestoneFourMetrics,
+  getMilestoneFreeSupportUsedMd,
   HandoverChecklist,
   KeyMilestone,
   PaymentInstallment,
@@ -31,7 +34,7 @@ import {
   MEETING_QUESTIONS_WITH_THAO,
 } from "@/lib/mock/am-mock-data"
 
-const STORAGE_KEY_CONTRACTS = "erp_am_prototype_contracts_v8"
+const STORAGE_KEY_CONTRACTS = "erp_am_prototype_contracts_v9"
 const STORAGE_KEY_CUSTOMERS = "erp_am_prototype_customers_v3"
 const STORAGE_KEY_NOTES = "erp_am_prototype_meeting_notes_v3"
 
@@ -86,6 +89,7 @@ interface AmPrototypeContextType {
     }
   ) => void
   finishMilestone: (contractId: string, scopeId: string, note?: string) => void
+  reopenMilestone: (contractId: string, scopeId: string, reason?: string) => void
   updateMilestone: (contractId: string, milestoneId: string, patch: Partial<KeyMilestone>) => void
   addMilestone: (
     contractId: string,
@@ -618,7 +622,7 @@ export function AmPrototypeProvider({ children }: { children: React.ReactNode })
       persistContracts(next)
       if (surplusMd >= 0) {
         toast.success(
-          `Đã Finish ${milestoneName}! Hệ thống tự tính dôi dư +${surplusMd} MD (50% bù rủi ro mốc sau, 50% chia thưởng).`
+          `Đã Finish ${milestoneName}! Hệ thống tự tính dôi dư +${surplusMd} MD (50% bù rủi ro mốc sau, 50% chia thưởng ngay khi đợt liên kết PAID).`
         )
       } else {
         toast.warning(
@@ -627,6 +631,99 @@ export function AmPrototypeProvider({ children }: { children: React.ReactNode })
       }
     },
     [contracts, persistContracts]
+  )
+
+  /**
+   * Mở lại Mốc đã Finish (Reopen Milestone) khi phát hiện lỗi UAT / phát sinh trước khi đóng HĐ
+   */
+  const reopenMilestone = React.useCallback(
+    (contractId: string, scopeId: string, reason?: string) => {
+      const targetContract = contracts.find((c) => c.id === contractId)
+      if (!targetContract) return
+      if (targetContract.phase === "CLOSED") {
+        toast.error("Dự án đã đóng sổ (CLOSED), không thể Reopen Mốc!")
+        return
+      }
+
+      const now = new Date()
+      const pad = (n: number) => String(n).padStart(2, "0")
+      const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+      const formattedNow = `${today} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+
+      let milestoneCode = ""
+      let hadPaidInstallment = false
+      const updatedBy =
+        roleView === "PM"
+          ? targetContract.pmOwner || "PM Dự án"
+          : roleView === "AM"
+          ? targetContract.amOwner || "AM Thảo"
+          : "BOD Vũ Minh Hoàng"
+
+      const next: ContractProject[] = contracts.map((c) => {
+        if (c.id !== contractId) return c
+
+        const nextItems = c.scopeItems.map((s): ScopeItem => {
+          if (s.id !== scopeId) return s
+          const m4 = getMilestoneFourMetrics(s, c)
+          milestoneCode = s.code
+          hadPaidInstallment = m4.linkedInstallments.some(
+            (inst) => inst.paymentStatus === "PAID"
+          )
+
+          const reopenNote =
+            reason?.trim() ||
+            "Mở lại Mốc (Reopen) để xử lý lỗi sau nghiệm thu UAT."
+          const paidAuditSuffix = hadPaidInstallment
+            ? " [Lưu ý: Đợt liên kết đã PAID -> đối trừ phần thưởng 50% đã chi khi Finish lại]"
+            : ""
+
+          return {
+            ...s,
+            status: "IN_PROGRESS",
+            isAccepted: false,
+            acceptedDate: undefined,
+            finishedAt: undefined,
+            lastCheckDate: today,
+            progressPercent: Math.min(90, s.progressPercent || 90),
+            pmNote: `[Reopen] ${reopenNote}`,
+            progressLogs: [
+              {
+                id: `log-reopen-${Date.now()}`,
+                updatedAt: formattedNow,
+                updatedBy,
+                logType: "REOPEN_MILESTONE",
+                status: "IN_PROGRESS",
+                deltaMandays: 0,
+                previousActualMandays: m4.realMandays,
+                newActualMandays: m4.realMandays,
+                limitMandaysSnapshot: m4.limitMandays,
+                note: `[Reopen ${s.code}] ${reopenNote}${paidAuditSuffix}`,
+              },
+              ...(s.progressLogs || []),
+            ],
+          }
+        })
+
+        return {
+          ...c,
+          phase: c.phase === "POST_PROJECT" ? "IN_PROJECT" : c.phase,
+          lastCheckInDate: today,
+          scopeItems: nextItems,
+        }
+      })
+
+      persistContracts(next)
+      if (hadPaidInstallment) {
+        toast.warning(
+          `Đã Reopen ${milestoneCode}! Lưu ý: Đợt thanh toán liên kết đã PAID — nếu đã chi thưởng 50%, cần đối trừ phần chênh lệch khi Finish lại.`
+        )
+      } else {
+        toast.info(
+          `Đã Reopen ${milestoneCode} về trạng thái Đang triển khai để tiếp tục cập nhật.`
+        )
+      }
+    },
+    [contracts, persistContracts, roleView]
   )
 
   const updateMilestone = React.useCallback(
@@ -742,6 +839,33 @@ export function AmPrototypeProvider({ children }: { children: React.ReactNode })
 
   const addChangeRequest = React.useCallback(
     (contractId: string, cr: Omit<ChangeRequestItem, "id" | "code">) => {
+      const targetContract = contracts.find((c) => c.id === contractId)
+      if (!targetContract) return
+
+      const isFreeCr =
+        cr.crType === "FREE_SUPPORT" || cr.status === "APPROVED_FREE_GOODWILL"
+      const normalizedDevMd = Number(cr.devMandays ?? cr.pmEstimatedMandays ?? 0)
+
+      if (isFreeCr) {
+        if (normalizedDevMd <= 0) {
+          toast.error("Số ngày công Hỗ trợ 0đ phải lớn hơn 0.")
+          return
+        }
+        const usedOnScope = getMilestoneFreeSupportUsedMd(
+          targetContract,
+          cr.milestoneId
+        )
+        if (
+          usedOnScope + normalizedDevMd >
+          FREE_SUPPORT_MAX_MD_PER_MILESTONE + 1e-6
+        ) {
+          toast.error(
+            `Vượt trần Hỗ trợ 0đ của Mốc (tối đa ${FREE_SUPPORT_MAX_MD_PER_MILESTONE} MD Dev/mốc, đã dùng ${usedOnScope} MD)! Vui lòng chuyển sang Upsell tính phí.`
+          )
+          return
+        }
+      }
+
       const now = new Date()
       const pad = (n: number) => String(n).padStart(2, "0")
       const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
@@ -749,29 +873,35 @@ export function AmPrototypeProvider({ children }: { children: React.ReactNode })
 
       const next = contracts.map((c) => {
         if (c.id !== contractId) return c
-        const isFreeSupport =
-          cr.crType === "FREE_SUPPORT" || cr.status === "APPROVED_FREE_GOODWILL"
-        const prefix = isFreeSupport ? "SUP" : "CR"
+        const prefix = isFreeCr ? "SUP" : "CR"
         const code = `${prefix}-0${c.changeRequests.length + 1}`
         const newCr: ChangeRequestItem = {
           ...cr,
+          ...(isFreeCr
+            ? {
+                devMandays: normalizedDevMd,
+                pmEstimatedMandays: normalizedDevMd,
+                amAllocatedToPmMandays: normalizedDevMd,
+                quotedPriceVnd: 0,
+              }
+            : {}),
           id: `cr-${Date.now()}`,
           code,
         }
 
-        // Nếu là Phát sinh hỗ trợ 0 đồng -> Tự động Log luôn số Mandays thực tế vào Mốc đang chạy để trừ số dư & lưu bằng chứng!
+        // Hỗ trợ 0đ (tỉ lệ 1:1): tách cột supportMandays riêng, KHÔNG cộng vào actualMandays (Real) để bảo toàn thưởng 50/50
         let nextScopeItems = c.scopeItems
-        let nextConsumed = c.actualConsumedMandays
 
-        if (isFreeSupport && cr.milestoneId) {
+        if (isFreeCr && cr.milestoneId) {
           nextScopeItems = c.scopeItems.map((s) => {
             if (s.id !== cr.milestoneId) return s
-            const prevReal = Number(s.actualMandays || 0)
-            const addedReal = Number(cr.pmEstimatedMandays || 0)
-            const nextReal = Number((prevReal + addedReal).toFixed(1))
+            const m4 = getMilestoneFourMetrics(s, c)
+            const prevReal = m4.realMandays
+            const prevSupport = m4.supportMandays
+            const nextSupport = Number((prevSupport + normalizedDevMd).toFixed(2))
             return {
               ...s,
-              actualMandays: nextReal,
+              supportMandays: nextSupport,
               lastCheckDate: today,
               progressLogs: [
                 {
@@ -780,34 +910,29 @@ export function AmPrototypeProvider({ children }: { children: React.ReactNode })
                   updatedBy: `${c.amOwner} (Ghi nhận Hỗ trợ 0đ)`,
                   logType: "FREE_SUPPORT",
                   status: s.status || "IN_PROGRESS",
-                  deltaMandays: addedReal,
+                  deltaMandays: 0,
                   previousActualMandays: prevReal,
-                  newActualMandays: nextReal,
-                  limitMandaysSnapshot: s.limitMandays,
-                  note: `[Hỗ trợ 0đ - ${code}] ${cr.title} (Dev: ${cr.devMandays ?? 1} MD -> Thực tế cả test/bàn giao: +${addedReal} MD)`,
+                  newActualMandays: prevReal,
+                  limitMandaysSnapshot: m4.limitMandays,
+                  note: `[Hỗ trợ 0đ - ${code}] ${cr.title} (+${normalizedDevMd} MD vào cột Hỗ trợ 0đ riêng • Lũy kế ${nextSupport}/${FREE_SUPPORT_MAX_MD_PER_MILESTONE} MD trên mốc, không trừ thưởng Real).`,
                 },
                 ...(s.progressLogs || []),
               ],
             }
           })
-          nextConsumed = nextScopeItems.reduce(
-            (sum, i) => sum + Number(i.actualMandays || 0),
-            0
-          )
         }
 
         return {
           ...c,
           lastCheckInDate: today,
-          actualConsumedMandays: nextConsumed,
           scopeItems: nextScopeItems,
           changeRequests: [newCr, ...c.changeRequests],
         }
       })
       persistContracts(next)
-      if (cr.crType === "FREE_SUPPORT") {
+      if (isFreeCr) {
         toast.info(
-          `Đã Log Hỗ trợ 0đ (+${cr.pmEstimatedMandays} MD thực tế) vào Mốc & Lưu bằng chứng đàm phán cho AM!`
+          `Đã ghi nhận Hỗ trợ 0đ (+${normalizedDevMd} MD theo tỉ lệ 1:1) vào cột riêng của Mốc (không trừ vào Real/thưởng)!`
         )
       } else {
         toast.success("Đã ghi nhận Yêu cầu phát sinh (Upsell) vào Mốc!")
@@ -1225,6 +1350,34 @@ export function AmPrototypeProvider({ children }: { children: React.ReactNode })
 
   const closeProjectAndSettleKpi = React.useCallback(
     (contractId: string) => {
+      const target = contracts.find((c) => c.id === contractId)
+      if (!target) return
+      const metrics = calculateContractMetrics(target)
+      if (!metrics.canCloseProject) {
+        const blockers: string[] = []
+        if (metrics.scopeAcceptancePercent < 100) {
+          blockers.push(
+            `Mốc chưa hoàn thành 100% (${metrics.acceptedScopeCount}/${metrics.totalScopeCount})`
+          )
+        }
+        if (!metrics.isHandoverComplete) {
+          blockers.push("Chưa đủ 3/3 mục Handover")
+        }
+        if (!metrics.isAllInstallmentsPaid) {
+          blockers.push("Chưa thu đủ 100% Đợt thanh toán (PAID)")
+        }
+        if (!metrics.isAllVatIssued) {
+          blockers.push("Chưa xuất đủ 100% Hóa đơn VAT (Số HĐ + File)")
+        }
+        if (!metrics.isAllAmExpensesReimbursed) {
+          blockers.push(
+            `Còn ${metrics.unreimbursedExpensesCount} khoản chi công tác AM chưa hoàn ứng (REIMBURSED)`
+          )
+        }
+        toast.error(`Chưa thể Đóng dự án: ${blockers.join(" • ")}`)
+        return
+      }
+
       const next = contracts.map((c) =>
         c.id === contractId
           ? {
@@ -1351,6 +1504,7 @@ export function AmPrototypeProvider({ children }: { children: React.ReactNode })
       updateActionBlockerNote,
       logMilestoneMandays,
       finishMilestone,
+      reopenMilestone,
       updateMilestone,
       addMilestone,
       removeMilestone,
@@ -1404,6 +1558,7 @@ export function AmPrototypeProvider({ children }: { children: React.ReactNode })
       updateActionBlockerNote,
       logMilestoneMandays,
       finishMilestone,
+      reopenMilestone,
       updateMilestone,
       addMilestone,
       removeMilestone,

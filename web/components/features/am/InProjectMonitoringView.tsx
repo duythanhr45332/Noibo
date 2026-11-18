@@ -266,7 +266,7 @@ export function InProjectMonitoringView() {
     setCrDescription("")
     if (defaultType === "FREE_SUPPORT") {
       setCrDevMd(0.5)
-      setCrEstimatedMd(1.5)
+      setCrEstimatedMd(0.5)
       setCrQuotedPrice(0)
       setCrTimelineDays(0)
     } else {
@@ -1463,23 +1463,21 @@ Do đó, rất mong Anh/Chị hỗ trợ giải ngân đúng hạn các đợt t
                       onChange={(e) => {
                         const devVal = Number(e.target.value) || 0
                         setCrDevMd(devVal)
-                        setCrEstimatedMd(Number((devVal * 3).toFixed(2)))
+                        setCrEstimatedMd(devVal)
                       }}
                       className="h-9 text-xs font-bold bg-white"
                     />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold">
-                      Tổng MD thực tế (×3 gồm Test & Bàn giao)
+                      Số MD Hỗ trợ 0đ (Tỉ lệ 1:1 • Tách cột riêng)
                     </Label>
                     <Input
                       type="number"
-                      step={0.5}
+                      step={0.25}
                       value={crEstimatedMd}
-                      onChange={(e) =>
-                        setCrEstimatedMd(Number(e.target.value) || 0)
-                      }
-                      className="h-9 text-xs font-bold bg-white text-blue-700"
+                      readOnly
+                      className="h-9 text-xs font-bold bg-slate-50 text-blue-700"
                     />
                   </div>
                 </div>

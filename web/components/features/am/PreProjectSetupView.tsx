@@ -107,6 +107,145 @@ interface DraftInstallmentRow {
   triggerMilestoneName: string
 }
 
+interface CreditParams {
+  fixedCostAllocation: number
+  salesCommissionAmount: number
+  riskReservePercent: number
+  standardMandayRate: number
+  bufferCompressionPercent: number
+}
+
+function computeAllowedContractMaxMandays(
+  rows: Array<Pick<DraftScopeRow, "amountBeforeVat" | "vatCategory">>,
+  params: Pick<
+    CreditParams,
+    | "fixedCostAllocation"
+    | "salesCommissionAmount"
+    | "riskReservePercent"
+    | "standardMandayRate"
+  >
+) {
+  const tax = calculateTaxBreakdownFromItems(rows)
+  const baseContractValue = tax.grandTotalWithTax
+  const riskReserveAmount = Math.round(
+    (baseContractValue * params.riskReservePercent) / 100
+  )
+  const creditY = Math.max(
+    0,
+    baseContractValue -
+      (params.fixedCostAllocation +
+        params.salesCommissionAmount +
+        riskReserveAmount)
+  )
+  const allowedMaxMandays =
+    params.standardMandayRate > 0
+      ? Math.floor(creditY / params.standardMandayRate)
+      : 0
+  return { baseContractValue, riskReserveAmount, creditY, allowedMaxMandays }
+}
+
+function computeCompressedTarget(limitMd: number, compressionPct: number): number {
+  const limit = Math.max(0, Math.round(Number(limitMd) || 0))
+  if (limit === 0) return 0
+  const pct = Math.min(100, Math.max(10, Number(compressionPct) || 80))
+  return Math.min(limit, Math.max(1, Math.round((limit * pct) / 100)))
+}
+
+/**
+ * Tự động phân bổ tổng trần Limit (= floor(Credit Y / Đơn giá)) theo tỷ trọng Phân bổ tiền,
+ * bảo đảm tổng Limit các Mốc đúng bằng allowedMaxMandays (không thất thoát làm tròn)
+ * và tự tính Target = Limit * tỷ lệ nén AM.
+ */
+function distributeScopeLimitsAndTargets(
+  rows: DraftScopeRow[],
+  params: CreditParams
+): DraftScopeRow[] {
+  if (rows.length === 0) return rows
+  const { allowedMaxMandays } = computeAllowedContractMaxMandays(rows, params)
+  const weights = rows.map((r) => Math.max(0, Number(r.amountBeforeVat || 0)))
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0)
+
+  const exactShares = rows.map((_, i) =>
+    totalWeight > 0
+      ? (weights[i] / totalWeight) * allowedMaxMandays
+      : allowedMaxMandays / rows.length
+  )
+  const allocated = exactShares.map((s) => Math.floor(s))
+  let remainder =
+    allowedMaxMandays - allocated.reduce((sum, val) => sum + val, 0)
+
+  const orderByRemainder = exactShares
+    .map((s, idx) => ({ idx, frac: s - allocated[idx] }))
+    .sort((a, b) => b.frac - a.frac)
+
+  for (let i = 0; i < orderByRemainder.length && remainder > 0; i++) {
+    allocated[orderByRemainder[i].idx] += 1
+    remainder -= 1
+  }
+
+  return rows.map((r, idx) => {
+    const limitMandays = Math.max(0, allocated[idx])
+    return {
+      ...r,
+      limitMandays,
+      targetMandays: computeCompressedTarget(
+        limitMandays,
+        params.bufferCompressionPercent
+      ),
+    }
+  })
+}
+
+const INITIAL_DRAFT_FINANCIAL_PARAMS: CreditParams = {
+  fixedCostAllocation: 65_000_000,
+  salesCommissionAmount: 45_000_000,
+  riskReservePercent: 25,
+  standardMandayRate: 2_500_000,
+  bufferCompressionPercent: 80,
+}
+
+const INITIAL_DRAFT_SCOPE_ROWS: DraftScopeRow[] = [
+  {
+    id: "s-1",
+    code: "MỐC-01",
+    title: "Mốc 1 (Foundation): Huấn luyện dữ liệu pháp lý & Vector DB Core",
+    ownerPic: "Anh Du (Lead Foundation)",
+    dueDate: "2026-11-25",
+    amountBeforeVat: 220_000_000,
+    vatCategory: "NON_VAT",
+    limitMandays: 48,
+    targetMandays: 38,
+    estimatedMandays: 25,
+    handoverEstimatedMandays: 1,
+  },
+  {
+    id: "s-2",
+    code: "MỐC-02",
+    title: "Mốc 2 (Core): Tích hợp Chatbot vào Zalo OA, Fanpage và App Sale",
+    ownerPic: "Chị Giang (PM Tổng)",
+    dueDate: "2026-12-25",
+    amountBeforeVat: 180_000_000,
+    vatCategory: "NON_VAT",
+    limitMandays: 39,
+    targetMandays: 31,
+    estimatedMandays: 21,
+    handoverEstimatedMandays: 1,
+  },
+  {
+    id: "s-3",
+    code: "MỐC-03",
+    title: "Mốc 3 (Đào tạo & Bàn giao): Đào tạo UAT, Hướng dẫn vận hành & Nghiệm thu",
+    ownerPic: "Anh Thanh (Phụ trách Đào tạo & UAT)",
+    dueDate: "2027-01-25",
+    amountBeforeVat: 100_000_000,
+    vatCategory: "VAT_10",
+    limitMandays: 22,
+    targetMandays: 18,
+    estimatedMandays: 13,
+    handoverEstimatedMandays: 4,
+  },
+]
+
 interface PreProjectSetupViewProps {
   mode?: "create" | "detail"
 }
@@ -142,6 +281,9 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
   const [isEditingScope, setIsEditingScope] = React.useState(false)
   const [isEditingSchedule, setIsEditingSchedule] = React.useState(false)
+  const [hideMoneyAllocationCol, setHideMoneyAllocationCol] =
+    React.useState(false)
+  const showMoneyAllocationCol = roleView !== "PM" && !hideMoneyAllocationCol
 
   const [newCustomerModalOpen, setNewCustomerModalOpen] = React.useState(false)
   const [newCustName, setNewCustName] = React.useState("")
@@ -198,55 +340,30 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
   ])
 
   // Tài chính & Credit (Create Mode)
-  const [fixedCostAllocation, setFixedCostAllocation] = React.useState<number>(65_000_000)
-  const [salesCommissionAmount, setSalesCommissionAmount] = React.useState<number>(45_000_000)
-  const [riskReservePercent, setRiskReservePercent] = React.useState<number>(25)
-  const [standardMandayRate, setStandardMandayRate] = React.useState<number>(2_500_000)
-  const [bufferCompressionPercent, setBufferCompressionPercent] = React.useState<number>(80)
+  const [fixedCostAllocation, setFixedCostAllocation] = React.useState<number>(
+    INITIAL_DRAFT_FINANCIAL_PARAMS.fixedCostAllocation
+  )
+  const [salesCommissionAmount, setSalesCommissionAmount] =
+    React.useState<number>(INITIAL_DRAFT_FINANCIAL_PARAMS.salesCommissionAmount)
+  const [riskReservePercent, setRiskReservePercent] = React.useState<number>(
+    INITIAL_DRAFT_FINANCIAL_PARAMS.riskReservePercent
+  )
+  const [standardMandayRate, setStandardMandayRate] = React.useState<number>(
+    INITIAL_DRAFT_FINANCIAL_PARAMS.standardMandayRate
+  )
+  const [bufferCompressionPercent, setBufferCompressionPercent] =
+    React.useState<number>(
+      INITIAL_DRAFT_FINANCIAL_PARAMS.bufferCompressionPercent
+    )
   const [invoiceMethod] = React.useState<InvoiceMethod>("BY_INSTALLMENT")
 
-  // Danh mục MỐC BÀN GIAO KỸ THUẬT (Scope Milestones - có PIC riêng & đủ Limit / Target / Estimate)
-  const [scopeRows, setScopeRows] = React.useState<DraftScopeRow[]>([
-    {
-      id: "s-1",
-      code: "MỐC-01",
-      title: "Mốc 1 (Foundation): Huấn luyện dữ liệu pháp lý & Vector DB Core",
-      ownerPic: "Anh Du (Lead Foundation)",
-      dueDate: "2026-11-25",
-      amountBeforeVat: 220_000_000,
-      vatCategory: "NON_VAT",
-      limitMandays: 30,
-      targetMandays: 24,
-      estimatedMandays: 25,
-      handoverEstimatedMandays: 1,
-    },
-    {
-      id: "s-2",
-      code: "MỐC-02",
-      title: "Mốc 2 (Core): Tích hợp Chatbot vào Zalo OA, Fanpage và App Sale",
-      ownerPic: "Chị Giang (PM Tổng)",
-      dueDate: "2026-12-25",
-      amountBeforeVat: 180_000_000,
-      vatCategory: "NON_VAT",
-      limitMandays: 25,
-      targetMandays: 20,
-      estimatedMandays: 21,
-      handoverEstimatedMandays: 1,
-    },
-    {
-      id: "s-3",
-      code: "MỐC-03",
-      title: "Mốc 3 (Đào tạo & Bàn giao): Đào tạo UAT, Hướng dẫn vận hành & Nghiệm thu",
-      ownerPic: "Anh Thanh (Phụ trách Đào tạo & UAT)",
-      dueDate: "2027-01-25",
-      amountBeforeVat: 100_000_000,
-      vatCategory: "VAT_10",
-      limitMandays: 15,
-      targetMandays: 12,
-      estimatedMandays: 13,
-      handoverEstimatedMandays: 4,
-    },
-  ])
+  // Danh mục MỐC BÀN GIAO KỸ THUẬT (Scope Milestones - Limit & Target tự tính từ Phân bổ tiền & Credit Y)
+  const [scopeRows, setScopeRows] = React.useState<DraftScopeRow[]>(() =>
+    distributeScopeLimitsAndTargets(
+      INITIAL_DRAFT_SCOPE_ROWS,
+      INITIAL_DRAFT_FINANCIAL_PARAMS
+    )
+  )
 
   // Lộ trình ĐỢT THANH TOÁN (Payment Tranches - độc lập nhưng liên kết với Mốc bàn giao)
   const [installments, setInstallments] = React.useState<DraftInstallmentRow[]>([
@@ -392,15 +509,56 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
     0
   )
 
+  const allowedCreateMaxMandays =
+    effectiveRate > 0 ? Math.floor(creditY / effectiveRate) : 0
+  const allowedTotalMaxMandays = isCreateMode
+    ? allowedCreateMaxMandays
+    : (effectiveRate > 0
+        ? Math.floor(
+            Math.max(
+              0,
+              (detailMetrics?.baseInternalCreditVnd || 0) / effectiveRate
+            )
+          )
+        : 0) + (activeContract?.upsellAddedMandays || 0)
+
   const maxMandays = isCreateMode
-    ? totalScopeLimitMd || (effectiveRate > 0 ? Math.floor(creditY / effectiveRate) : 0)
+    ? totalScopeLimitMd
     : detailMetrics?.totalMaxMandays || 0
 
   const amTargetMandays = isCreateMode
-    ? totalScopeTargetMd || Math.max(1, Math.round((maxMandays * bufferCompressionPercent) / 100))
+    ? totalScopeTargetMd
     : detailMetrics?.effectiveTargetMandays || activeContract?.amTargetMandays || 0
 
   const amBufferMandays = Math.max(0, maxMandays - amTargetMandays)
+
+  const applyFinancialRecalc = (
+    nextRows: DraftScopeRow[],
+    overrides?: Partial<CreditParams>
+  ) => {
+    const params: CreditParams = {
+      fixedCostAllocation,
+      salesCommissionAmount,
+      riskReservePercent,
+      standardMandayRate,
+      bufferCompressionPercent,
+      ...overrides,
+    }
+    setScopeRows(distributeScopeLimitsAndTargets(nextRows, params))
+  }
+
+  const handleCompressionPercentChange = (nextPct: number) => {
+    const clampedPct = Math.min(100, Math.max(50, Number(nextPct) || 80))
+    setBufferCompressionPercent(clampedPct)
+    if (isCreateMode) {
+      setScopeRows((prev) =>
+        prev.map((row) => ({
+          ...row,
+          targetMandays: computeCompressedTarget(row.limitMandays, clampedPct),
+        }))
+      )
+    }
+  }
 
   const totalInstallmentPercent = isCreateMode
     ? installments.reduce((sum, i) => sum + Number(i.percentage || 0), 0)
@@ -449,7 +607,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
   const handleAddScopeRow = () => {
     if (isCreateMode) {
       const nextIdx = scopeRows.length + 1
-      setScopeRows([
+      const nextRows: DraftScopeRow[] = [
         ...scopeRows,
         {
           id: `s-${Date.now()}`,
@@ -459,12 +617,13 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
           dueDate: expectedEndDate,
           amountBeforeVat: 50_000_000,
           vatCategory: "NON_VAT",
-          limitMandays: 15,
-          targetMandays: 12,
+          limitMandays: 0,
+          targetMandays: 0,
           estimatedMandays: 12,
           handoverEstimatedMandays: 2,
         },
-      ])
+      ]
+      applyFinancialRecalc(nextRows)
     } else if (activeContract) {
       const nextIdx = activeContract.scopeItems.length + 1
       addScopeItem(activeContract.id, {
@@ -563,6 +722,25 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
       toast.error("Vui lòng nhập Mã hợp đồng và Tên hợp đồng/dự án")
       return
     }
+    if (standardMandayRate <= 0) {
+      toast.error("Đơn giá 1 Manday chuẩn phải lớn hơn 0 VNĐ")
+      return
+    }
+    if (totalScopeLimitMd > allowedCreateMaxMandays) {
+      toast.error(
+        `Tổng Limit các Mốc (${totalScopeLimitMd} MD) vượt quá trần Credit Y / Đơn giá (${allowedCreateMaxMandays} MD)! Vui lòng giảm Limit hoặc tăng giá trị HĐ.`
+      )
+      return
+    }
+    const invalidTargetRow = scopeRows.find(
+      (r) => Number(r.targetMandays) > Number(r.limitMandays)
+    )
+    if (invalidTargetRow) {
+      toast.error(
+        `Mức giao PM (Target) của ${invalidTargetRow.code} (${invalidTargetRow.targetMandays} MD) không được vượt Limit (${invalidTargetRow.limitMandays} MD)!`
+      )
+      return
+    }
     if (totalInstallmentPercent !== 100) {
       toast.error(
         `Tổng tỉ lệ các đợt thanh toán đang là ${totalInstallmentPercent}%. Vui lòng điều chỉnh đủ 100%!`
@@ -656,10 +834,13 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
         blockerNote: "",
         amountBeforeVat: Number(r.amountBeforeVat) || 0,
         vatCategory: r.vatCategory,
-        limitMandays: Number(r.limitMandays) || 15,
-        targetMandays: Number(r.targetMandays) || 12,
-        estimatedMandays: Number(r.estimatedMandays) || 12,
-        handoverEstimatedMandays: Number(r.handoverEstimatedMandays) || 2,
+        limitMandays: Math.max(0, Number(r.limitMandays ?? 0)),
+        targetMandays: Math.max(0, Number(r.targetMandays ?? 0)),
+        estimatedMandays: Math.max(0, Number(r.estimatedMandays ?? 0)),
+        handoverEstimatedMandays: Math.max(
+          0,
+          Number(r.handoverEstimatedMandays ?? 0)
+        ),
         actualMandays: 0,
         isAccepted: false,
       })),
@@ -1200,7 +1381,30 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                     Chia theo module kỹ thuật (Foundation, Core, Đào tạo/UAT). Mỗi mốc có Người phụ trách (PIC) riêng và bộ chỉ số <strong>Limit • Target • Estimate (gồm Bàn giao)</strong>.
                   </p>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {roleView !== "PM" && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1"
+                      onClick={() =>
+                        setHideMoneyAllocationCol((prev) => !prev)
+                      }
+                    >
+                      {hideMoneyAllocationCol ? (
+                        <>
+                          <IconEye className="size-3.5" />
+                          Hiện phân bổ tiền
+                        </>
+                      ) : (
+                        <>
+                          <IconEyeOff className="size-3.5" />
+                          Ẩn phân bổ tiền
+                        </>
+                      )}
+                    </Button>
+                  )}
                   {!isCreateMode && roleView !== "PM" && (
                     <Button
                       size="sm"
@@ -1231,25 +1435,25 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
               <Table>
                 <TableHeader className="bg-slate-50/80">
                   <TableRow>
-                    <TableHead className="w-[75px] pl-4 text-xs">Mã Mốc</TableHead>
-                    <TableHead className="text-xs">Mốc bàn giao & Người phụ trách (PIC)</TableHead>
-                    {roleView !== "PM" && (
-                      <TableHead className="w-[115px] text-xs">
+                    <TableHead className="w-[92px] min-w-[88px] pl-4 text-xs">Mã Mốc</TableHead>
+                    <TableHead className="min-w-[260px] text-xs">Mốc bàn giao & Người phụ trách (PIC)</TableHead>
+                    {showMoneyAllocationCol && (
+                      <TableHead className="w-[160px] min-w-[155px] text-xs">
                         Phân bổ tiền
                       </TableHead>
                     )}
                     {roleView !== "PM" && (
-                      <TableHead className="w-[65px] text-center text-xs">
+                      <TableHead className="w-[100px] min-w-[96px] text-center text-xs">
                         Limit
                       </TableHead>
                     )}
-                    <TableHead className="w-[65px] text-center text-xs text-primary">
+                    <TableHead className="w-[100px] min-w-[96px] text-center text-xs text-primary">
                       Target
                     </TableHead>
-                    <TableHead className="w-[85px] text-center text-xs">
+                    <TableHead className="w-[115px] min-w-[108px] text-center text-xs">
                       Est (Gồm BG)
                     </TableHead>
-                    {(isCreateMode || isEditingScope) && <TableHead className="w-[36px]" />}
+                    {(isCreateMode || isEditingScope) && <TableHead className="w-[40px]" />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1280,7 +1484,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                               }}
                               className="h-7 text-xs"
                             />
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                               <Select
                                 value={row.ownerPic}
                                 onValueChange={(v) => {
@@ -1295,7 +1499,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                                   }
                                 }}
                               >
-                                <SelectTrigger className="h-7 text-[11px] w-56">
+                                <SelectTrigger className="h-7 text-[11px] flex-1 min-w-[155px]">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1320,7 +1524,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                                     })
                                   }
                                 }}
-                                className="h-7 text-[11px] w-36"
+                                className="h-7 text-[11px] w-[132px] shrink-0"
                               />
                             </div>
                           </div>
@@ -1348,53 +1552,104 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                         )}
                       </TableCell>
 
-                      {roleView !== "PM" && (
+                      {showMoneyAllocationCol && (
                         <TableCell className="text-xs font-medium align-top py-3">
                           {isCreateMode || isEditingScope ? (
-                            <Input
-                              type="number"
-                              step={10_000_000}
-                              value={row.amountBeforeVat}
-                              onChange={(e) => {
-                                const val = Number(e.target.value) || 0
-                                if (isCreateMode) {
-                                  const next = [...scopeRows]
-                                  next[idx] = { ...row, amountBeforeVat: val }
-                                  setScopeRows(next)
-                                } else if (activeContract) {
-                                  updateScopeItem(activeContract.id, row.id, {
-                                    amountBeforeVat: val,
-                                  })
-                                }
-                              }}
-                              className="h-7 text-xs"
-                            />
+                            hidePrice ? (
+                              <button
+                                type="button"
+                                onClick={togglePriceVisible}
+                                title="Bấm để hiện số tiền và chỉnh sửa Phân bổ tiền"
+                                className="flex h-7 w-full min-w-[138px] items-center justify-between rounded-md border border-dashed border-slate-300 bg-slate-50 px-2.5 text-xs text-slate-600 hover:bg-slate-100"
+                              >
+                                <span className="tabular-nums">
+                                  {formatMoney(row.amountBeforeVat)}
+                                </span>
+                                <IconEye className="size-3.5 text-slate-400 shrink-0" />
+                              </button>
+                            ) : (
+                              <div className="space-y-1">
+                                <Input
+                                  type="number"
+                                  step={10_000_000}
+                                  value={row.amountBeforeVat}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, Number(e.target.value) || 0)
+                                    if (isCreateMode) {
+                                      const next = [...scopeRows]
+                                      next[idx] = { ...row, amountBeforeVat: val }
+                                      applyFinancialRecalc(next)
+                                    } else if (activeContract) {
+                                      updateScopeItem(activeContract.id, row.id, {
+                                        amountBeforeVat: val,
+                                      })
+                                    }
+                                  }}
+                                  className="h-7 text-xs tabular-nums min-w-[138px]"
+                                />
+                                <div className="text-[10px] text-muted-foreground tabular-nums">
+                                  {formatMoney(row.amountBeforeVat)}
+                                </div>
+                              </div>
+                            )
                           ) : (
                             formatMoney(row.amountBeforeVat)
                           )}
                         </TableCell>
                       )}
 
-                      {/* 1. Limit MD */}
+                      {/* 1. Limit MD (Khóa tổng <= Credit Y / Đơn giá) */}
                       {roleView !== "PM" && (
                         <TableCell className="text-center text-xs font-bold align-top py-3">
                           {isCreateMode || isEditingScope ? (
                             <Input
                               type="number"
+                              min={0}
+                              max={
+                                row.limitMandays +
+                                Math.max(0, allowedTotalMaxMandays - totalScopeLimitMd)
+                              }
                               value={row.limitMandays}
                               onChange={(e) => {
-                                const md = Number(e.target.value) || 0
+                                const rawMd = Math.max(0, Number(e.target.value) || 0)
+                                const otherSum = displayedScopeRows.reduce(
+                                  (sum, r, i) =>
+                                    i === idx ? sum : sum + Number(r.limitMandays || 0),
+                                  0
+                                )
+                                const maxForRow = Math.max(
+                                  0,
+                                  allowedTotalMaxMandays - otherSum
+                                )
+                                const clampedMd =
+                                  rawMd > maxForRow ? maxForRow : rawMd
+                                if (rawMd > maxForRow) {
+                                  toast.warning(
+                                    `Khóa trần Credit Y: Tổng Limit tối đa ${allowedTotalMaxMandays} MD (Mốc ${row.code} chỉ nhận tối đa ${maxForRow} MD)!`
+                                  )
+                                }
                                 if (isCreateMode) {
                                   const next = [...scopeRows]
-                                  next[idx] = { ...row, limitMandays: md }
+                                  next[idx] = {
+                                    ...row,
+                                    limitMandays: clampedMd,
+                                    targetMandays: Math.min(
+                                      row.targetMandays,
+                                      clampedMd
+                                    ),
+                                  }
                                   setScopeRows(next)
                                 } else if (activeContract) {
                                   updateScopeItem(activeContract.id, row.id, {
-                                    limitMandays: md,
+                                    limitMandays: clampedMd,
+                                    targetMandays: Math.min(
+                                      row.targetMandays,
+                                      clampedMd
+                                    ),
                                   })
                                 }
                               }}
-                              className="h-7 text-xs text-center"
+                              className="h-7 text-xs text-center tabular-nums min-w-[78px]"
                             />
                           ) : (
                             `${row.limitMandays} MD`
@@ -1402,25 +1657,33 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                         </TableCell>
                       )}
 
-                      {/* 2. Target MD */}
+                      {/* 2. Target MD (Khóa <= Limit của Mốc) */}
                       <TableCell className="text-center text-xs font-bold text-primary align-top py-3">
                         {isCreateMode || isEditingScope ? (
                           <Input
                             type="number"
+                            min={0}
+                            max={row.limitMandays}
                             value={row.targetMandays}
                             onChange={(e) => {
-                              const md = Number(e.target.value) || 0
+                              const rawMd = Math.max(0, Number(e.target.value) || 0)
+                              const clampedMd = Math.min(rawMd, row.limitMandays)
+                              if (rawMd > row.limitMandays) {
+                                toast.warning(
+                                  `Mức giao PM (Target) không được vượt quá Limit (${row.limitMandays} MD) của ${row.code}!`
+                                )
+                              }
                               if (isCreateMode) {
                                 const next = [...scopeRows]
-                                next[idx] = { ...row, targetMandays: md }
+                                next[idx] = { ...row, targetMandays: clampedMd }
                                 setScopeRows(next)
                               } else if (activeContract) {
                                 updateScopeItem(activeContract.id, row.id, {
-                                  targetMandays: md,
+                                  targetMandays: clampedMd,
                                 })
                               }
                             }}
-                            className="h-7 text-xs text-center"
+                            className="h-7 text-xs text-center tabular-nums min-w-[78px]"
                           />
                         ) : (
                           `${row.targetMandays} MD`
@@ -1433,9 +1696,10 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                           <div className="space-y-1">
                             <Input
                               type="number"
+                              min={0}
                               value={row.estimatedMandays}
                               onChange={(e) => {
-                                const md = Number(e.target.value) || 0
+                                const md = Math.max(0, Number(e.target.value) || 0)
                                 if (isCreateMode) {
                                   const next = [...scopeRows]
                                   next[idx] = { ...row, estimatedMandays: md }
@@ -1446,7 +1710,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                                   })
                                 }
                               }}
-                              className="h-7 text-xs text-center"
+                              className="h-7 text-xs text-center tabular-nums min-w-[82px]"
                             />
                           </div>
                         ) : (
@@ -1470,7 +1734,9 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                             onClick={() => {
                               if (isCreateMode) {
                                 if (scopeRows.length > 1) {
-                                  setScopeRows(scopeRows.filter((r) => r.id !== row.id))
+                                  applyFinancialRecalc(
+                                    scopeRows.filter((r) => r.id !== row.id)
+                                  )
                                 }
                               } else if (activeContract) {
                                 removeScopeItem(activeContract.id, row.id)
@@ -1489,11 +1755,24 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
               <div className="p-4 border-t bg-slate-50/70 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                 <div>
                   <span className="text-muted-foreground block">
-                    Tổng Limit (Công ty cấp):
+                    Tổng Limit / Trần Credit Y:
                   </span>
-                  <strong className="text-foreground">
-                    {roleView === "PM" ? "Đã ẩn" : `${totalScopeLimitMd} MD`}
+                  <strong
+                    className={
+                      totalScopeLimitMd > allowedTotalMaxMandays
+                        ? "text-red-600"
+                        : "text-foreground"
+                    }
+                  >
+                    {roleView === "PM"
+                      ? "Đã ẩn"
+                      : `${totalScopeLimitMd} / ${allowedTotalMaxMandays} MD`}
                   </strong>
+                  {roleView !== "PM" && isCreateMode && (
+                    <span className="block text-[10px] text-muted-foreground mt-0.5">
+                      Còn khả dụng: {Math.max(0, allowedTotalMaxMandays - totalScopeLimitMd)} MD
+                    </span>
+                  )}
                 </div>
                 <div>
                   <span className="text-muted-foreground block">
@@ -1619,6 +1898,149 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                   <div className="flex justify-between pt-1 border-t border-emerald-200/80 text-[11px]">
                     <span>Đơn giá 1 Manday chuẩn:</span>
                     <strong>{formatMoney(effectiveRate)} / MD</strong>
+                  </div>
+                </div>
+              )}
+
+              {roleView !== "PM" && isCreateMode && (
+                <div className="rounded-lg border bg-slate-50 p-3.5 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-semibold text-slate-900">
+                        Quy đổi Credit Y &amp; Tỷ lệ nén Target
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        Credit Y: <strong>{formatMoney(creditY)}</strong> • Trần tối đa:{" "}
+                        <strong>{allowedCreateMaxMandays} MD</strong>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => applyFinancialRecalc(scopeRows)}
+                      className="h-7 text-[11px] bg-white"
+                    >
+                      Chia lại Limit theo tiền
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Đơn giá 1 MD (VNĐ)</Label>
+                      {hidePrice ? (
+                        <button
+                          type="button"
+                          onClick={togglePriceVisible}
+                          className="flex h-7 w-full items-center justify-between rounded-md border border-dashed border-slate-300 bg-white px-2.5 text-xs text-slate-600 hover:bg-slate-100"
+                        >
+                          <span>{formatMoney(standardMandayRate)}</span>
+                          <IconEye className="size-3.5 text-slate-400" />
+                        </button>
+                      ) : (
+                        <Input
+                          type="number"
+                          step={100_000}
+                          value={standardMandayRate}
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0)
+                            setStandardMandayRate(val)
+                            applyFinancialRecalc(scopeRows, { standardMandayRate: val })
+                          }}
+                          className="h-7 text-xs tabular-nums bg-white"
+                        />
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Quỹ rủi ro (%)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={60}
+                        value={riskReservePercent}
+                        onChange={(e) => {
+                          const val = Math.min(
+                            60,
+                            Math.max(0, Number(e.target.value) || 0)
+                          )
+                          setRiskReservePercent(val)
+                          applyFinancialRecalc(scopeRows, { riskReservePercent: val })
+                        }}
+                        className="h-7 text-xs tabular-nums bg-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Chi phí cố định (VNĐ)</Label>
+                      {hidePrice ? (
+                        <button
+                          type="button"
+                          onClick={togglePriceVisible}
+                          className="flex h-7 w-full items-center justify-between rounded-md border border-dashed border-slate-300 bg-white px-2.5 text-xs text-slate-600 hover:bg-slate-100"
+                        >
+                          <span>{formatMoney(fixedCostAllocation)}</span>
+                          <IconEye className="size-3.5 text-slate-400" />
+                        </button>
+                      ) : (
+                        <Input
+                          type="number"
+                          step={5_000_000}
+                          value={fixedCostAllocation}
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0)
+                            setFixedCostAllocation(val)
+                            applyFinancialRecalc(scopeRows, { fixedCostAllocation: val })
+                          }}
+                          className="h-7 text-xs tabular-nums bg-white"
+                        />
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px]">Hoa hồng Sale (VNĐ)</Label>
+                      {hidePrice ? (
+                        <button
+                          type="button"
+                          onClick={togglePriceVisible}
+                          className="flex h-7 w-full items-center justify-between rounded-md border border-dashed border-slate-300 bg-white px-2.5 text-xs text-slate-600 hover:bg-slate-100"
+                        >
+                          <span>{formatMoney(salesCommissionAmount)}</span>
+                          <IconEye className="size-3.5 text-slate-400" />
+                        </button>
+                      ) : (
+                        <Input
+                          type="number"
+                          step={5_000_000}
+                          value={salesCommissionAmount}
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0)
+                            setSalesCommissionAmount(val)
+                            applyFinancialRecalc(scopeRows, {
+                              salesCommissionAmount: val,
+                            })
+                          }}
+                          className="h-7 text-xs tabular-nums bg-white"
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        Tỷ lệ nén Target tự động (% của Limit):
+                      </span>
+                      <span className="font-semibold text-primary tabular-nums">
+                        {bufferCompressionPercent}% ({amTargetMandays} / {maxMandays} MD)
+                      </span>
+                    </div>
+                    <Slider
+                      min={50}
+                      max={100}
+                      step={5}
+                      value={[bufferCompressionPercent]}
+                      onValueChange={(v) =>
+                        handleCompressionPercentChange(v[0] ?? 80)
+                      }
+                    />
                   </div>
                 </div>
               )}
