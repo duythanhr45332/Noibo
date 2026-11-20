@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { axiosInstance } from "@/lib/api/axios-instance"
-import Cookies from "js-cookie"
 
 export type UserProfile = {
   user_id: string;
@@ -19,52 +18,74 @@ export type UserProfile = {
 
 type AuthContextType = {
   user: UserProfile | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
   hasPermission: (module: string, action: string) => boolean;
   refetchUser: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined)
 
-const DEFAULT_DEMO_USER: UserProfile = {
-  user_id: "demo-am-01",
-  username: "thao.am",
-  full_name: "Thảo (Account Manager)",
-  department: "Khối Quản trị Dự án & Khách hàng",
-  role: "ACCOUNT_MANAGER",
-  is_system: true,
-  is_system_role: true,
-  permissions: ["SYSTEM_ADMIN"],
-}
+const FOCUS_RECHECK_INTERVAL_MS = 5 * 60 * 1000
 
 export function AuthProvider({ children, initialUser = null }: { children: React.ReactNode, initialUser?: UserProfile | null }) {
-  const [user, setUser] = React.useState<UserProfile | null>(initialUser || DEFAULT_DEMO_USER)
-  const [isLoading, setIsLoading] = React.useState(false)
+  const [user, setUser] = React.useState<UserProfile | null>(initialUser)
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean>(Boolean(initialUser))
+  const [isLoading, setIsLoading] = React.useState<boolean>(!initialUser)
+  const lastFetchedAtRef = React.useRef<number>(0)
+  const hasInitializedRef = React.useRef<boolean>(Boolean(initialUser))
 
   const fetchUser = React.useCallback(async () => {
-    const hasToken = Boolean(Cookies.get('token') || Cookies.get('refreshToken'))
-    if (!hasToken) {
-      setUser(DEFAULT_DEMO_USER)
+    if (typeof window !== 'undefined' && window.location.pathname === '/login') {
       setIsLoading(false)
       return
     }
+    const isInitialLoad = !hasInitializedRef.current
     try {
-      Cookies.remove('user_profile')
-      const res = await axiosInstance.get('/auth/me', {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-        },
-      })
-      if (res.data.success) {
-        setUser(res.data.data)
+      if (isInitialLoad) setIsLoading(true)
+      const res = await axiosInstance.get('/auth/session')
+      lastFetchedAtRef.current = Date.now()
+      hasInitializedRef.current = true
+      const sessionData = res.data?.data as
+        | { authenticated?: boolean; user?: UserProfile | null }
+        | undefined
+      if (res.data?.success && sessionData?.authenticated && sessionData?.user) {
+        const nextUser = sessionData.user
+        setUser((prev) =>
+          prev &&
+          prev.user_id === nextUser.user_id &&
+          prev.role === nextUser.role &&
+          prev.full_name === nextUser.full_name
+            ? prev
+            : nextUser
+        )
+        setIsAuthenticated(true)
       } else {
-        setUser(DEFAULT_DEMO_USER)
+        setUser(null)
+        setIsAuthenticated(false)
       }
     } catch {
-      setUser(DEFAULT_DEMO_USER)
+      lastFetchedAtRef.current = Date.now()
+      hasInitializedRef.current = true
+      setUser(null)
+      setIsAuthenticated(false)
     } finally {
-      setIsLoading(false)
+      if (isInitialLoad) setIsLoading(false)
+    }
+  }, [])
+
+  const logout = React.useCallback(async () => {
+    try {
+      await axiosInstance.post('/auth/logout')
+    } catch {
+      // Ignore network/401 errors during logout and still reset client state
+    } finally {
+      setUser(null)
+      setIsAuthenticated(false)
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login'
+      }
     }
   }, [])
 
@@ -72,7 +93,9 @@ export function AuthProvider({ children, initialUser = null }: { children: React
     fetchUser()
 
     const handleFocus = () => {
-      fetchUser()
+      if (Date.now() - lastFetchedAtRef.current > FOCUS_RECHECK_INTERVAL_MS) {
+        fetchUser()
+      }
     }
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
@@ -92,8 +115,8 @@ export function AuthProvider({ children, initialUser = null }: { children: React
   }, [user])
 
   const value = React.useMemo(
-    () => ({ user, isLoading, hasPermission, refetchUser: fetchUser }),
-    [user, isLoading, hasPermission, fetchUser]
+    () => ({ user, isAuthenticated, isLoading, hasPermission, refetchUser: fetchUser, logout }),
+    [user, isAuthenticated, isLoading, hasPermission, fetchUser, logout]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

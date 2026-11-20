@@ -32,6 +32,7 @@ class GetMeProfile {
       user_id: user.user_id,
       username: user.username,
       full_name: user.full_name,
+      department: user.department || null,
       role: user.role,
       is_active: user.is_active,
       created_at: user.created_at,

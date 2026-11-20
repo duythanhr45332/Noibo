@@ -14,16 +14,14 @@ const seedAdmin = async () => {
     const passwordHash = await bcrypt.hash(adminPassword, saltRounds);
 
     const checkResult = await db.query(
-      'SELECT * FROM users WHERE username = $1',
+      'SELECT user_id, username, role FROM users WHERE username = $1 AND deleted_at IS NULL',
       [adminUsername],
     );
 
     if (checkResult.rows.length > 0) {
-      await db.query(
-        'UPDATE users SET password_hash = $1, role = $2, is_active = true, deleted_at = NULL WHERE username = $3',
-        [passwordHash, 'ADMIN', adminUsername],
+      logger.info(
+        `Seed skipped: '${adminUsername}' already exists (role: ${checkResult.rows[0].role}). Existing password preserved.`
       );
-      logger.info(`Updated '${adminUsername}' successfully!`);
       process.exit(0);
     }
 

@@ -14,7 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useAmPrototype } from "@/components/providers/am-prototype-provider"
+import { useWorkspaceUi } from "@/components/providers/workspace-ui-provider"
+import {
+  useWorkspaceContracts,
+  useWorkspaceCustomerOptions,
+  useWorkspaceRole,
+} from "@/lib/hooks/use-workspace-data"
 import {
   MandayBulletBar,
   PersonAvatar,
@@ -48,14 +53,18 @@ const PHASE_BADGE_MAP: Record<
 }
 
 export function PortfolioDashboardView() {
+  const { contracts, isLoading: isContractsLoading } = useWorkspaceContracts({
+    includeDetails: false,
+  })
+  const { customerOptions: customers } = useWorkspaceCustomerOptions()
+  const { isPmRole } = useWorkspaceRole()
+
   const {
-    contracts,
-    customers,
-    roleView,
     formatMoney,
     setActiveScreen,
     openContractDetail,
-  } = useAmPrototype()
+  } = useWorkspaceUi()
+  const roleView = isPmRole ? "PM" : "AM"
 
   const [searchQuery, setSearchQuery] = React.useState("")
   const [healthFilter, setHealthFilter] = React.useState<string>("ALL")

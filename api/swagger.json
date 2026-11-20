@@ -52,8 +52,20 @@
             "type": "string",
             "example": "Quản trị viên Hệ thống (Root)"
           },
+          "department": {
+            "type": "string",
+            "nullable": true,
+            "example": "Ban Giám Đốc"
+          },
           "role": {
             "type": "string",
+            "enum": [
+              "ADMIN",
+              "BOD",
+              "ACCOUNTANT",
+              "AM",
+              "PM"
+            ],
             "example": "ADMIN"
           },
           "is_active": {
@@ -65,6 +77,263 @@
             "format": "date-time"
           },
           "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "example": 1
+          },
+          "limit": {
+            "type": "integer",
+            "example": 20
+          },
+          "total": {
+            "type": "integer",
+            "example": 12
+          },
+          "totalPages": {
+            "type": "integer",
+            "example": 1
+          }
+        }
+      },
+      "UserOption": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "username": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "department": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "BOD",
+              "ACCOUNTANT",
+              "AM",
+              "PM"
+            ]
+          }
+        }
+      },
+      "UserListResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              },
+              "pagination": {
+                "$ref": "#/components/schemas/PaginationMeta"
+              }
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserDetailResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserProfile"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserOptionsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserOption"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateUserRequest": {
+        "type": "object",
+        "required": [
+          "username",
+          "password",
+          "full_name",
+          "role"
+        ],
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "thao.am"
+          },
+          "password": {
+            "type": "string",
+            "example": "ErpAm@2026"
+          },
+          "full_name": {
+            "type": "string",
+            "example": "Nguyễn Phương Thảo"
+          },
+          "department": {
+            "type": "string",
+            "nullable": true,
+            "example": "Khối Quản trị Khách hàng"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "BOD",
+              "ACCOUNTANT",
+              "AM",
+              "PM"
+            ],
+            "example": "AM"
+          },
+          "is_active": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "UpdateUserRequest": {
+        "type": "object",
+        "properties": {
+          "full_name": {
+            "type": "string"
+          },
+          "department": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "BOD",
+              "ACCOUNTANT",
+              "AM",
+              "PM"
+            ]
+          },
+          "new_password": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ToggleUserStatusRequest": {
+        "type": "object",
+        "required": [
+          "is_active"
+        ],
+        "properties": {
+          "is_active": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "RoleDefinition": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "BOD",
+              "ACCOUNTANT",
+              "AM",
+              "PM"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "RoleListResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleDefinition"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
             "type": "string",
             "format": "date-time"
           }
@@ -123,10 +392,2948 @@
             }
           }
         }
+      },
+      "CustomerContact": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "CustomerItem": {
+        "type": "object",
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tax_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "industry": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "tech_contact": {
+            "$ref": "#/components/schemas/CustomerContact"
+          },
+          "accounting_contact": {
+            "$ref": "#/components/schemas/CustomerContact"
+          },
+          "contract_count": {
+            "type": "integer"
+          },
+          "total_contract_value": {
+            "type": "number",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CustomerOption": {
+        "type": "object",
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tax_code": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "CustomerListResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CustomerItem"
+                }
+              },
+              "pagination": {
+                "$ref": "#/components/schemas/PaginationMeta"
+              }
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CustomerDetailResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CustomerItem"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "contracts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "contract_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "code": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "phase": {
+                          "type": "string"
+                        },
+                        "start_date": {
+                          "type": "string"
+                        },
+                        "end_date": {
+                          "type": "string"
+                        },
+                        "base_contract_value": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "approved_upsell_value": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "am_name": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "pm_name": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CustomerOptionsResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerOption"
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateCustomerRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tax_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "industry": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "tech_contact": {
+            "$ref": "#/components/schemas/CustomerContact"
+          },
+          "accounting_contact": {
+            "$ref": "#/components/schemas/CustomerContact"
+          }
+        }
+      },
+      "UpdateCustomerRequest": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tax_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "industry": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "tech_contact": {
+            "$ref": "#/components/schemas/CustomerContact"
+          },
+          "accounting_contact": {
+            "$ref": "#/components/schemas/CustomerContact"
+          }
+        }
+      },
+      "UploadedFileResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "file_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "original_name": {
+                "type": "string"
+              },
+              "mime_type": {
+                "type": "string"
+              },
+              "file_size": {
+                "type": "integer"
+              },
+              "category": {
+                "type": "string"
+              },
+              "contract_id": {
+                "type": "string",
+                "format": "uuid",
+                "nullable": true
+              },
+              "url": {
+                "type": "string"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ScopeItemDto": {
+        "type": "object",
+        "properties": {
+          "scope_item_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contract_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "module_name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "owner_pic": {
+            "type": "string",
+            "nullable": true
+          },
+          "sort_order": {
+            "type": "integer"
+          },
+          "vat_category": {
+            "type": "string",
+            "enum": [
+              "NON_VAT",
+              "VAT_8",
+              "VAT_10"
+            ]
+          },
+          "amount_before_vat": {
+            "type": "number",
+            "nullable": true
+          },
+          "limit_mandays": {
+            "type": "number"
+          },
+          "target_mandays": {
+            "type": "number"
+          },
+          "estimated_mandays": {
+            "type": "number"
+          },
+          "handover_estimated_mandays": {
+            "type": "number"
+          },
+          "actual_mandays": {
+            "type": "number"
+          },
+          "support_mandays": {
+            "type": "number"
+          },
+          "progress_percent": {
+            "type": "integer"
+          },
+          "execution_status": {
+            "type": "string"
+          },
+          "is_accepted": {
+            "type": "boolean"
+          },
+          "bonus_payout_status": {
+            "type": "string"
+          },
+          "bonus_paid_amount": {
+            "type": "number",
+            "nullable": true
+          }
+        }
+      },
+      "InstallmentDto": {
+        "type": "object",
+        "properties": {
+          "installment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contract_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "trigger_type": {
+            "type": "string"
+          },
+          "percentage": {
+            "type": "number"
+          },
+          "non_vat_base_amount": {
+            "type": "number",
+            "nullable": true
+          },
+          "vat_taxable_base_amount": {
+            "type": "number",
+            "nullable": true
+          },
+          "vat_tax_amount": {
+            "type": "number",
+            "nullable": true
+          },
+          "amount_total": {
+            "type": "number",
+            "nullable": true
+          },
+          "vat_rate_hint": {
+            "type": "string"
+          },
+          "due_date": {
+            "type": "string",
+            "nullable": true
+          },
+          "payment_status": {
+            "type": "string"
+          },
+          "vat_invoice_status": {
+            "type": "string"
+          },
+          "vat_invoice_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "linked_milestone_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "ContractSummaryDto": {
+        "type": "object",
+        "properties": {
+          "contract_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customer_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "owner_am_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "am_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "owner_pm_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "pm_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "PRE_PROJECT",
+              "IN_PROJECT",
+              "POST_PROJECT",
+              "CLOSED"
+            ]
+          },
+          "start_date": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string"
+          },
+          "base_contract_value": {
+            "type": "number",
+            "nullable": true
+          },
+          "approved_upsell_value": {
+            "type": "number",
+            "nullable": true
+          },
+          "initial_max_mandays": {
+            "type": "number"
+          },
+          "am_target_mandays": {
+            "type": "number"
+          },
+          "total_limit_mandays": {
+            "type": "number"
+          },
+          "total_target_mandays": {
+            "type": "number"
+          },
+          "total_estimated_mandays": {
+            "type": "number"
+          },
+          "total_actual_mandays": {
+            "type": "number"
+          },
+          "total_support_mandays": {
+            "type": "number"
+          },
+          "scope_count": {
+            "type": "integer"
+          },
+          "accepted_scope_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "ContractDetailDto": {
+        "type": "object",
+        "properties": {
+          "contract_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "customer_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "owner_am_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "am_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "owner_pm_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "pm_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "phase": {
+            "type": "string"
+          },
+          "signed_date": {
+            "type": "string",
+            "nullable": true
+          },
+          "start_date": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string"
+          },
+          "check_cycle_days": {
+            "type": "integer"
+          },
+          "base_contract_value": {
+            "type": "number",
+            "nullable": true
+          },
+          "approved_upsell_value": {
+            "type": "number",
+            "nullable": true
+          },
+          "fixed_cost_allocation": {
+            "type": "number",
+            "nullable": true
+          },
+          "sales_commission_amount": {
+            "type": "number",
+            "nullable": true
+          },
+          "risk_reserve_percent": {
+            "type": "number",
+            "nullable": true
+          },
+          "standard_manday_rate": {
+            "type": "number",
+            "nullable": true
+          },
+          "initial_max_mandays": {
+            "type": "number"
+          },
+          "upsell_added_mandays": {
+            "type": "number"
+          },
+          "am_target_mandays": {
+            "type": "number"
+          },
+          "drive_root_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "drive_permissions_verified": {
+            "type": "boolean"
+          },
+          "kickoff_checklist": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "bod_allow_kickoff_without_advance": {
+            "type": "boolean"
+          },
+          "handover": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "scope_items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScopeItemDto"
+            }
+          },
+          "installments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstallmentDto"
+            }
+          },
+          "change_requests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "am_expenses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "ContractListResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ContractSummaryDto"
+                }
+              },
+              "pagination": {
+                "$ref": "#/components/schemas/PaginationMeta"
+              }
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ContractDetailResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ContractDetailDto"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateContractRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "customer_id",
+          "start_date",
+          "end_date",
+          "scope_items"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "owner_am_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "owner_pm_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "signed_date": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string"
+          },
+          "end_date": {
+            "type": "string"
+          },
+          "check_cycle_days": {
+            "type": "integer",
+            "default": 7
+          },
+          "fixed_cost_allocation": {
+            "type": "number",
+            "default": 0
+          },
+          "sales_commission_amount": {
+            "type": "number",
+            "default": 0
+          },
+          "risk_reserve_percent": {
+            "type": "number",
+            "default": 25
+          },
+          "standard_manday_rate": {
+            "type": "number",
+            "default": 2500000
+          },
+          "compression_ratio": {
+            "type": "number",
+            "default": 0.8
+          },
+          "vat_rate_percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "invoice_method": {
+            "type": "string",
+            "enum": [
+              "BY_INSTALLMENT",
+              "LUMP_SUM_ON_ACCEPTANCE"
+            ]
+          },
+          "external_accountant_note": {
+            "type": "string",
+            "nullable": true
+          },
+          "drive_root_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "kickoff_checklist": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "scope_items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "title"
+              ],
+              "properties": {
+                "temp_key": {
+                  "type": "string"
+                },
+                "code": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "module_name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "owner_pic": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "amount_before_vat": {
+                  "type": "number"
+                },
+                "vat_category": {
+                  "type": "string",
+                  "enum": [
+                    "NON_VAT",
+                    "VAT_8",
+                    "VAT_10"
+                  ]
+                },
+                "limit_mandays": {
+                  "type": "number"
+                },
+                "target_mandays": {
+                  "type": "number"
+                },
+                "estimated_mandays": {
+                  "type": "number"
+                },
+                "handover_estimated_mandays": {
+                  "type": "number"
+                },
+                "due_date": {
+                  "type": "string",
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "installments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "label",
+                "percentage"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "trigger_type": {
+                  "type": "string",
+                  "enum": [
+                    "ADVANCE",
+                    "MILESTONE",
+                    "ACCEPTANCE",
+                    "OTHER"
+                  ]
+                },
+                "percentage": {
+                  "type": "number"
+                },
+                "due_date": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "linked_milestone_keys": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "UpdateContractRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "owner_pm_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "check_cycle_days": {
+            "type": "integer"
+          },
+          "drive_root_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "drive_permissions_verified": {
+            "type": "boolean"
+          },
+          "bod_allow_kickoff_without_advance": {
+            "type": "boolean"
+          },
+          "quick_action_blocker": {
+            "type": "string",
+            "nullable": true
+          },
+          "manual_force_red_flag": {
+            "type": "boolean"
+          },
+          "manual_red_flag_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "external_accountant_note": {
+            "type": "string",
+            "nullable": true
+          },
+          "fixed_cost_allocation": {
+            "type": "number"
+          },
+          "sales_commission_amount": {
+            "type": "number"
+          },
+          "risk_reserve_percent": {
+            "type": "number"
+          },
+          "standard_manday_rate": {
+            "type": "number"
+          },
+          "vat_rate_percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "kickoff_checklist": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "am_custom_tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AddContractDocumentRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "url"
+        ],
+        "properties": {
+          "doc_type": {
+            "type": "string",
+            "enum": [
+              "CONTRACT",
+              "CONTRACT_SCAN",
+              "SCOPE_SRS",
+              "CLIENT_INPUT",
+              "HANDOVER",
+              "ACCEPTANCE",
+              "QUOTATION",
+              "INVOICE",
+              "DRIVE_LINK",
+              "OTHER"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "file_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "file_size": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "CreateScopeItemRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "owner_pic": {
+            "type": "string",
+            "nullable": true
+          },
+          "amount_before_vat": {
+            "type": "number"
+          },
+          "vat_category": {
+            "type": "string",
+            "enum": [
+              "NON_VAT",
+              "VAT_8",
+              "VAT_10"
+            ]
+          },
+          "limit_mandays": {
+            "type": "number"
+          },
+          "target_mandays": {
+            "type": "number"
+          },
+          "estimated_mandays": {
+            "type": "number"
+          },
+          "handover_estimated_mandays": {
+            "type": "number"
+          },
+          "due_date": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UpdateScopeItemRequest": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "owner_pic": {
+            "type": "string",
+            "nullable": true
+          },
+          "due_date": {
+            "type": "string",
+            "nullable": true
+          },
+          "amount_before_vat": {
+            "type": "number"
+          },
+          "vat_category": {
+            "type": "string",
+            "enum": [
+              "NON_VAT",
+              "VAT_8",
+              "VAT_10"
+            ]
+          },
+          "limit_mandays": {
+            "type": "number"
+          },
+          "target_mandays": {
+            "type": "number"
+          },
+          "estimated_mandays": {
+            "type": "number"
+          },
+          "handover_estimated_mandays": {
+            "type": "number"
+          },
+          "pm_note": {
+            "type": "string",
+            "nullable": true
+          },
+          "blocker_note": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "LogMandaysRequest": {
+        "type": "object",
+        "properties": {
+          "delta_mandays": {
+            "type": "number"
+          },
+          "new_cumulative_mandays": {
+            "type": "number"
+          },
+          "progress_percent": {
+            "type": "integer"
+          },
+          "execution_status": {
+            "type": "string",
+            "enum": [
+              "NOT_STARTED",
+              "IN_PROGRESS",
+              "DELAYED",
+              "BLOCKED"
+            ]
+          },
+          "check_date": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "blocker_note": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "CreateChangeRequest": {
+        "type": "object",
+        "required": [
+          "target_scope_item_id",
+          "cr_type",
+          "title"
+        ],
+        "properties": {
+          "target_scope_item_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cr_type": {
+            "type": "string",
+            "enum": [
+              "UPSELL",
+              "FREE_SUPPORT"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "requested_by_client_contact": {
+            "type": "string"
+          },
+          "dev_mandays": {
+            "type": "number"
+          },
+          "pm_estimated_mandays": {
+            "type": "number"
+          },
+          "am_allocated_to_pm_mandays": {
+            "type": "number"
+          },
+          "quoted_price_vnd": {
+            "type": "number"
+          },
+          "vat_category": {
+            "type": "string",
+            "enum": [
+              "NON_VAT",
+              "VAT_8",
+              "VAT_10"
+            ]
+          },
+          "timeline_impact_days": {
+            "type": "integer"
+          },
+          "am_negotiation_note": {
+            "type": "string"
+          }
+        }
+      },
+      "ResolveChangeRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "PM_ESTIMATING",
+              "AM_QUOTING",
+              "PENDING_CLIENT_QUOTE",
+              "APPROVED_UPSELL",
+              "REJECTED"
+            ]
+          },
+          "pm_estimated_mandays": {
+            "type": "number"
+          },
+          "am_allocated_to_pm_mandays": {
+            "type": "number"
+          },
+          "quoted_price_vnd": {
+            "type": "number"
+          },
+          "vat_category": {
+            "type": "string",
+            "enum": [
+              "NON_VAT",
+              "VAT_8",
+              "VAT_10"
+            ]
+          },
+          "am_negotiation_note": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateInstallmentVatRequest": {
+        "type": "object",
+        "required": [
+          "vat_invoice_status"
+        ],
+        "properties": {
+          "vat_invoice_status": {
+            "type": "string",
+            "enum": [
+              "NOT_YET",
+              "SENT_TO_ACCOUNTANT",
+              "ISSUED"
+            ]
+          },
+          "vat_invoice_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "vat_invoice_file_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "vat_invoice_file_url": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "CreateAmExpenseRequest": {
+        "type": "object",
+        "required": [
+          "contract_id",
+          "description",
+          "amount_vnd"
+        ],
+        "properties": {
+          "contract_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scope_item_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "expense_date": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "TAXI",
+              "SHIP",
+              "SHIPPING",
+              "MEAL",
+              "HOSPITALITY",
+              "CLIENT_MEETING",
+              "PRINTING",
+              "GIFT",
+              "OTHER"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "amount_vnd": {
+            "type": "number"
+          },
+          "receipt_url": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UpdateAmExpenseStatusRequest": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_REIMBURSE",
+              "REIMBURSED",
+              "REJECTED"
+            ]
+          }
+        }
+      },
+      "DisburseBonusRequest": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "example": "Đã chuyển khoản chi thưởng 50% đợt Mốc 1"
+          }
+        }
+      },
+      "DisburseBonusResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "scope_item_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "code": {
+                "type": "string"
+              },
+              "bonus_payout_status": {
+                "type": "string",
+                "example": "DISBURSED"
+              },
+              "bonus_mandays": {
+                "type": "number"
+              },
+              "bonus_paid_amount": {
+                "type": "number"
+              },
+              "bonus_disbursed_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuditLogItem": {
+        "type": "object",
+        "properties": {
+          "audit_log_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "entity_name": {
+            "type": "string",
+            "example": "scope_items"
+          },
+          "entity_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "type": "string",
+            "example": "DISBURSE_MILESTONE_BONUS"
+          },
+          "old_values": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "new_values": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "changed_by": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "actor_username": {
+            "type": "string",
+            "nullable": true
+          },
+          "actor_full_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "actor_role": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuditLogSummary": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "today_count": {
+            "type": "integer"
+          },
+          "sensitive_count": {
+            "type": "integer"
+          },
+          "unique_actors_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "AuditLogListResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AuditLogItem"
+                }
+              },
+              "summary": {
+                "$ref": "#/components/schemas/AuditLogSummary"
+              },
+              "pagination": {
+                "$ref": "#/components/schemas/PaginationMeta"
+              }
+            }
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     }
   },
   "paths": {
+    "/api/v1/users/options": {
+      "get": {
+        "summary": "Lấy danh sách tài khoản đang hoạt động cho dropdown chọn AM/PM",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "role",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ADMIN",
+                "BOD",
+                "ACCOUNTANT",
+                "AM",
+                "PM"
+              ]
+            },
+            "description": "Lọc theo vai trò (ví dụ AM hoặc PM)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách rút gọn người dùng đang hoạt động",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOptionsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "summary": "Danh sách tài khoản có phân trang & bộ lọc",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "role",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ADMIN",
+                "BOD",
+                "ACCOUNTANT",
+                "AM",
+                "PM"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "is_active",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách tài khoản và thông tin phân trang",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Tạo tài khoản người dùng mới",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo tài khoản thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dữ liệu đầu vào không hợp lệ"
+          },
+          "409": {
+            "description": "Tên đăng nhập đã tồn tại"
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}": {
+      "put": {
+        "summary": "Cập nhật thông tin tài khoản, vai trò hoặc đặt lại mật khẩu",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/status": {
+      "patch": {
+        "summary": "Khóa hoặc mở khóa tài khoản người dùng (tự động thu hồi refresh token khi khóa)",
+        "tags": [
+          "Users"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToggleUserStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã cập nhật trạng thái tài khoản",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scope-items/{id}": {
+      "patch": {
+        "summary": "Cập nhật Mốc bàn giao theo phân quyền từng trường (BOD sửa Limit, AM sửa Target, PM sửa Estimate/BG)",
+        "tags": [
+          "ScopeItems"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScopeItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật Mốc thành công"
+          }
+        }
+      }
+    },
+    "/api/v1/scope-items/{id}/logs": {
+      "post": {
+        "summary": "Log Mandays định kỳ (chỉ cộng vào actual_mandays Real, khóa PRE_PROJECT/CLOSED)",
+        "tags": [
+          "ScopeItems"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogMandaysRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đã ghi nhận ngày công"
+          }
+        }
+      }
+    },
+    "/api/v1/scope-items/{id}/finish": {
+      "post": {
+        "summary": "Chốt Finish Mốc bàn giao (tính dôi dư 50/50, tách AT_LIMIT hòa vốn, mở thưởng nếu đợt PAID)",
+        "tags": [
+          "ScopeItems"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Finish Mốc thành công"
+          }
+        }
+      }
+    },
+    "/api/v1/scope-items/{id}/reopen": {
+      "post": {
+        "summary": "Mở lại Mốc trước khi CLOSED (ghi log REOPEN_MILESTONE, chuyển POST_PROJECT -> IN_PROJECT)",
+        "tags": [
+          "ScopeItems"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reason"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã Reopen Mốc"
+          }
+        }
+      }
+    },
+    "/api/v1/scope-items/{id}/disburse-bonus": {
+      "post": {
+        "summary": "Kế toán/BOD/Admin xác nhận Đã thực chi thưởng 50% (ELIGIBLE -> DISBURSED)",
+        "tags": [
+          "ScopeItems"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisburseBonusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã xác nhận thực chi thưởng 50%",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisburseBonusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/roles": {
+      "get": {
+        "summary": "Lấy danh sách 5 vai trò chuẩn của hệ thống",
+        "tags": [
+          "Roles"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách vai trò hệ thống",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/installments/queue": {
+      "get": {
+        "summary": "Hàng đợi Phiếu Kế toán VAT & Công nợ phải thu",
+        "tags": [
+          "Installments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "status_filter",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "VAT_QUEUE",
+                "OVERDUE",
+                "UNPAID"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách đợt thanh toán"
+          }
+        }
+      }
+    },
+    "/api/v1/installments/{id}/vat": {
+      "patch": {
+        "summary": "Gửi phiếu Kế toán (AM) hoặc Xuất Hóa đơn VAT ISSUED kèm PDF (Kế toán/BOD/Admin)",
+        "tags": [
+          "Installments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInstallmentVatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã cập nhật trạng thái VAT"
+          }
+        }
+      }
+    },
+    "/api/v1/installments/{id}/pay": {
+      "patch": {
+        "summary": "Kế toán/BOD xác nhận Đã thu tiền PAID và tự động mở khóa chi thưởng 50%",
+        "tags": [
+          "Installments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Đã xác nhận PAID"
+          }
+        }
+      }
+    },
+    "/api/v1/files/upload": {
+      "post": {
+        "summary": "Tải lên tệp tài liệu (PDF, PNG, JPG, WEBP, DOCX, XLSX, tối đa 15MB)",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "contract_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "scope_item_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "installment_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "CONTRACT_SCAN",
+                      "SCOPE_SRS",
+                      "CLIENT_INPUT",
+                      "HANDOVER",
+                      "ACCEPTANCE",
+                      "INVOICE",
+                      "OTHER"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tải tệp lên thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadedFileResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/{id}": {
+      "get": {
+        "summary": "Xem trực tiếp (PDF/Image) hoặc tải về tệp đính kèm theo UUID",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Luồng dữ liệu tệp"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Xóa tệp đính kèm",
+        "tags": [
+          "Files"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Đã xóa tệp"
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/summary": {
+      "get": {
+        "summary": "Tổng hợp KPI Dashboard theo quyền (ẩn VNĐ đối với PM)",
+        "tags": [
+          "Dashboard"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dữ liệu tổng hợp Dashboard"
+          }
+        }
+      }
+    },
+    "/api/v1/customers/options": {
+      "get": {
+        "summary": "Lấy danh sách khách hàng rút gọn cho dropdown",
+        "tags": [
+          "Customers"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách khách hàng rút gọn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerOptionsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customers": {
+      "get": {
+        "summary": "Danh sách khách hàng có phân trang & tìm kiếm",
+        "tags": [
+          "Customers"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách khách hàng",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Tạo khách hàng mới (kiểm tra trùng MST)",
+        "tags": [
+          "Customers"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo khách hàng thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customers/{id}": {
+      "get": {
+        "summary": "Chi tiết khách hàng kèm danh sách hợp đồng liên quan",
+        "tags": [
+          "Customers"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chi tiết khách hàng",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Cập nhật thông tin doanh nghiệp và 2 đầu mối kỹ thuật / kế toán",
+        "tags": [
+          "Customers"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCustomerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật khách hàng thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Xóa mềm khách hàng (chặn nếu đang có hợp đồng)",
+        "tags": [
+          "Customers"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Đã xóa khách hàng"
+          }
+        }
+      }
+    },
+    "/api/v1/contracts": {
+      "get": {
+        "summary": "Danh sách hợp đồng có phân trang & bộ lọc (tự động ẩn VNĐ với vai trò PM)",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "phase",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PRE_PROJECT",
+                "IN_PROJECT",
+                "POST_PROJECT",
+                "CLOSED"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "customer_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách hợp đồng",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Khởi tạo Hợp đồng mới kèm Mốc bàn giao & Đợt thanh toán (Server tính Credit Y & VAT 3 cột)",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateContractRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Khởi tạo hợp đồng thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/contracts/{id}": {
+      "get": {
+        "summary": "Chi tiết đầy đủ Hợp đồng gồm Mốc, Đợt thanh toán, CR, Chi phí & Tài liệu",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chi tiết hợp đồng",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Cập nhật thông tin/cấu hình hợp đồng (RBAC kiểm tra theo trường)",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateContractRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật hợp đồng thành công",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractDetailResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/contracts/{id}/documents": {
+      "post": {
+        "summary": "Gắn tài liệu vào hợp đồng",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddContractDocumentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đã thêm tài liệu vào hợp đồng"
+          }
+        }
+      }
+    },
+    "/api/v1/contracts/{id}/documents/{docId}": {
+      "delete": {
+        "summary": "Xóa tài liệu khỏi hợp đồng",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "docId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Đã xóa tài liệu"
+          }
+        }
+      }
+    },
+    "/api/v1/contracts/{id}/kickoff": {
+      "post": {
+        "summary": "Gatekeeper",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Start Project thành công"
+          }
+        }
+      }
+    },
+    "/api/v1/contracts/{id}/scope-items": {
+      "post": {
+        "summary": "Thêm Mốc bàn giao mới vào hợp đồng",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScopeItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo Mốc bàn giao thành công"
+          }
+        }
+      }
+    },
+    "/api/v1/contracts/{id}/change-requests": {
+      "post": {
+        "summary": "Tạo Phát sinh (UPSELL hoặc FREE_SUPPORT 1:1 <= 1 MD/mốc) gắn vào Mốc đang chạy",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo phát sinh thành công"
+          }
+        }
+      }
+    },
+    "/api/v1/contracts/{id}/close": {
+      "post": {
+        "summary": "Gatekeeper",
+        "tags": [
+          "Contracts"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kpi_bonus_split_percent": {
+                    "type": "number",
+                    "default": 50
+                  },
+                  "handover": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đóng dự án thành công"
+          }
+        }
+      }
+    },
+    "/api/v1/change-requests/{id}": {
+      "patch": {
+        "summary": "PM ước lượng / AM báo giá / BOD & AM duyệt CR Upsell (tự động cộng Limit/Target/Est vào Mốc và tạo đợt TT)",
+        "tags": [
+          "ChangeRequests"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật / duyệt CR thành công"
+          }
+        }
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "summary": "Đăng nhập hệ thống",
@@ -157,6 +3364,20 @@
           },
           "401": {
             "description": "Sai tên đăng nhập hoặc mật khẩu"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/session": {
+      "get": {
+        "summary": "Kiểm tra trạng thái phiên đăng nhập hiện tại (tự làm mới nếu có refreshToken)",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Trạng thái phiên đăng nhập và thông tin user nếu đã xác thực"
           }
         }
       }
@@ -287,12 +3508,260 @@
           }
         }
       }
+    },
+    "/api/v1/audit-logs": {
+      "get": {
+        "summary": "Danh sách Nhật ký Kiểm toán có bộ lọc & phân trang",
+        "tags": [
+          "AuditLogs"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "entity_name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "changed_by",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_date",
+            "schema": {
+              "type": "string",
+              "example": "2026-10-01"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_date",
+            "schema": {
+              "type": "string",
+              "example": "2026-12-31"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách Nhật ký Kiểm toán kèm thống kê tổng quan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/am-expenses": {
+      "get": {
+        "summary": "Danh sách khoản chi phí AM có phân trang",
+        "tags": [
+          "AmExpenses"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "contract_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách chi phí AM"
+          }
+        }
+      },
+      "post": {
+        "summary": "AM tạo đề nghị hoàn ứng chi phí công tác",
+        "tags": [
+          "AmExpenses"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAmExpenseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo khoản chi thành công"
+          }
+        }
+      }
+    },
+    "/api/v1/am-expenses/{id}/status": {
+      "patch": {
+        "summary": "Kế toán/BOD duyệt hoàn ứng (REIMBURSED) hoặc từ chối (REJECTED)",
+        "tags": [
+          "AmExpenses"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAmExpenseStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật trạng thái hoàn ứng thành công"
+          }
+        }
+      }
     }
   },
   "tags": [
     {
+      "name": "Users",
+      "description": "Quản trị tài khoản người dùng & Phân quyền RBAC"
+    },
+    {
+      "name": "ScopeItems",
+      "description": "Quản lý Mốc bàn giao, Log Mandays định kỳ, Finish 50/50 & Reopen Mốc"
+    },
+    {
+      "name": "Roles",
+      "description": "Danh mục vai trò chuẩn RBAC"
+    },
+    {
+      "name": "Installments",
+      "description": "Hàng đợi Kế toán, Xuất Hóa đơn VAT (PDF) & Xác nhận PAID (Mở khóa thưởng 50%)"
+    },
+    {
+      "name": "Files",
+      "description": "Tải lên, xem trước và tải xuống tài liệu hợp đồng / BBNT / Hóa đơn VAT"
+    },
+    {
+      "name": "Dashboard",
+      "description": "Tổng hợp KPI Dự án, Công nợ & Cảnh báo nhắc Log Mandays"
+    },
+    {
+      "name": "Customers",
+      "description": "Quản lý Danh bạ Khách hàng & 2 Đầu mối (Kỹ thuật / Kế toán)"
+    },
+    {
+      "name": "Contracts",
+      "description": "Quản trị Hợp đồng, Credit Mandays & Pre-Project Setup"
+    },
+    {
+      "name": "ChangeRequests",
+      "description": "Phát sinh Hỗ trợ 0đ (1:1 <= 1 MD/mốc) và Upsell cộng thẳng Mốc"
+    },
+    {
       "name": "Authentication",
       "description": "API Xác thực & Đăng nhập (Auth Base)"
+    },
+    {
+      "name": "AuditLogs",
+      "description": "Tra cứu Nhật ký Kiểm toán hệ thống (BOD / Admin / Kế toán)"
+    },
+    {
+      "name": "AmExpenses",
+      "description": "Sổ Tạm ứng & Hoàn ứng Công tác phí AM"
     }
   ]
 }

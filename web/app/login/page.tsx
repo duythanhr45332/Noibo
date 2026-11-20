@@ -49,7 +49,7 @@ export default function LoginPage() {
         return
       }
       toast.success("Đăng nhập thành công!", {
-        description: "Đang chuyển hướng vào hệ thống..."
+        description: "Đang chuyển hướng vào hệ thống ERP-AM..."
       })
       window.location.href = "/"
     } catch (error: any) {
@@ -75,7 +75,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="relative z-10 p-10">
           <div className="flex items-center h-14">
-            <img src="/logo.svg" alt="VPCC Logo" className="h-14 w-auto object-contain" />
+            <img src="/logo.svg" alt="ERP-AM Logo" className="h-14 w-auto object-contain" />
           </div>
         </div>
 
@@ -112,7 +112,7 @@ export default function LoginPage() {
 
           {/* Mobile Logo */}
           <div className="flex items-center lg:hidden mb-10 rounded-xl justify-center py-5 bg-primary">
-            <img src="/logo.svg" alt="VPCC Logo" className="h-10 w-auto object-contain" />
+            <img src="/logo.svg" alt="ERP-AM Logo" className="h-10 w-auto object-contain" />
           </div>
 
           {/* Heading */}
@@ -184,7 +184,7 @@ export default function LoginPage() {
             </form>
           </Form>
 
-          <p className="text-center text-xs text-slate-500 mt-8">
+          <p className="text-center text-xs text-slate-500 mt-6">
             Hệ thống chỉ dành cho nhân sự được cấp quyền
           </p>
         </div>

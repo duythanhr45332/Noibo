@@ -1,6 +1,20 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+function isJwtNotExpired(tokenValue?: string): boolean {
+  if (!tokenValue) return false
+  try {
+    const parts = tokenValue.split('.')
+    if (parts.length !== 3) return false
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(base64)) as { exp?: number }
+    if (!payload.exp) return true
+    return payload.exp * 1000 > Date.now()
+  } catch {
+    return false
+  }
+}
+
 export function middleware(request: NextRequest) {
   const token = request.cookies.get('token')
   const { pathname } = request.nextUrl
@@ -13,25 +27,22 @@ export function middleware(request: NextRequest) {
     pathname === '/login' ||
     pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf|otf|css|js)$/)
   ) {
-    // Nếu đã có token mà lại vào trang login thì redirect phù hợp
-    if ((token || refreshToken) && pathname === '/login') {
+    // Chỉ redirect khỏi /login nếu access token còn hạn và không có cờ session_expired
+    if (pathname === '/login') {
       if (request.nextUrl.searchParams.get('session_expired')) {
         const response = NextResponse.next()
         response.cookies.delete('token')
         response.cookies.delete('refreshToken')
         return response
       }
-      return NextResponse.redirect(new URL('/', request.url))
+      if (isJwtNotExpired(token?.value)) {
+        return NextResponse.redirect(new URL('/', request.url))
+      }
     }
     return NextResponse.next()
   }
 
-  // Prototype Mode: Cho phép truy cập trực tiếp trang chủ và các màn hình Prototype mà không bắt buộc phải có token đăng nhập
-  if (pathname === '/' || pathname.startsWith('/prototype')) {
-    return NextResponse.next()
-  }
-
-  // Nếu không có cả token và refreshToken, redirect về trang login
+  // Bắt buộc đăng nhập thật trên toàn bộ hệ thống (không còn chế độ Demo)
   if (!token && !refreshToken) {
     return NextResponse.redirect(new URL('/login', request.url))
   }

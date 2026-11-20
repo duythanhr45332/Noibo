@@ -5,13 +5,16 @@
  * Tài liệu API Hệ thống ERP-AM (Base Auth)
  * OpenAPI spec version: 1.0.0
  */
+import type { UserProfileRole } from './userProfileRole';
 
 export interface UserProfile {
   id?: string;
   user_id?: string;
   username?: string;
   full_name?: string;
-  role?: string;
+  /** @nullable */
+  department?: string | null;
+  role?: UserProfileRole;
   is_active?: boolean;
   created_at?: string;
   updated_at?: string;

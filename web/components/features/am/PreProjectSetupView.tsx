@@ -20,7 +20,18 @@ import {
   IconUpload,
   IconUserCheck,
 } from "@tabler/icons-react"
+import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
+import { useAuth } from "@/components/providers/auth-provider"
+import {
+  useGetApiV1CustomersId,
+  useGetApiV1CustomersOptions,
+  usePostApiV1Customers,
+} from "@/lib/api/generated/customers/customers"
+import { useGetApiV1UsersOptions } from "@/lib/api/generated/users/users"
+import { usePostApiV1Contracts } from "@/lib/api/generated/contracts/contracts"
+import { usePostApiV1FilesUpload } from "@/lib/api/generated/files/files"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -55,12 +66,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAmPrototype } from "@/components/providers/am-prototype-provider"
+import { useWorkspaceUi } from "@/components/providers/workspace-ui-provider"
+import { useWorkspaceRole } from "@/lib/hooks/use-workspace-data"
 import {
   calculateContractMetrics,
   calculateTaxBreakdownFromItems,
   ContractProject,
   evaluateKickoffChecklist,
+  getEffectiveMandayRate,
   getMilestoneFourMetrics,
   InvoiceMethod,
   PreKickoffChecklist,
@@ -104,6 +117,7 @@ interface DraftInstallmentRow {
   percentage: number
   dueDate: string
   linkedMilestoneId: string
+  linkedMilestoneIds: string[]
   triggerMilestoneName: string
 }
 
@@ -113,6 +127,32 @@ interface CreditParams {
   riskReservePercent: number
   standardMandayRate: number
   bufferCompressionPercent: number
+  contractVatRatePercent?: number
+}
+
+function computeContractTaxWithRate(
+  rows: Array<Pick<DraftScopeRow, "amountBeforeVat" | "vatCategory">>,
+  contractVatRatePercent?: number
+) {
+  if (contractVatRatePercent !== undefined) {
+    const rate = Math.min(100, Math.max(0, Number(contractVatRatePercent) || 0))
+    const totalBeforeVat = rows.reduce(
+      (sum, r) => sum + Math.max(0, Number(r.amountBeforeVat || 0)),
+      0
+    )
+    const totalVatTax = rate > 0 ? Math.round((totalBeforeVat * rate) / 100) : 0
+    return {
+      nonVatTotal: rate === 0 ? totalBeforeVat : 0,
+      vat8Base: rate === 8 ? totalBeforeVat : 0,
+      vat8Tax: rate === 8 ? totalVatTax : 0,
+      vat10Base: rate === 10 ? totalBeforeVat : 0,
+      vat10Tax: rate === 10 ? totalVatTax : 0,
+      vatBaseTotal: rate > 0 ? totalBeforeVat : 0,
+      totalVatTax,
+      grandTotalWithTax: totalBeforeVat + totalVatTax,
+    }
+  }
+  return calculateTaxBreakdownFromItems(rows)
 }
 
 function computeAllowedContractMaxMandays(
@@ -123,9 +163,10 @@ function computeAllowedContractMaxMandays(
     | "salesCommissionAmount"
     | "riskReservePercent"
     | "standardMandayRate"
+    | "contractVatRatePercent"
   >
 ) {
-  const tax = calculateTaxBreakdownFromItems(rows)
+  const tax = computeContractTaxWithRate(rows, params.contractVatRatePercent)
   const baseContractValue = tax.grandTotalWithTax
   const riskReserveAmount = Math.round(
     (baseContractValue * params.riskReservePercent) / 100
@@ -238,8 +279,8 @@ const INITIAL_DRAFT_SCOPE_ROWS: DraftScopeRow[] = [
     ownerPic: "Anh Thanh (Phụ trách Đào tạo & UAT)",
     dueDate: "2027-01-25",
     amountBeforeVat: 100_000_000,
-    vatCategory: "VAT_10",
-    limitMandays: 22,
+    vatCategory: "NON_VAT",
+    limitMandays: 21,
     targetMandays: 18,
     estimatedMandays: 13,
     handoverEstimatedMandays: 4,
@@ -251,31 +292,31 @@ interface PreProjectSetupViewProps {
 }
 
 export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProps) {
+  const queryClient = useQueryClient()
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth()
+  const canQueryRealApi = isAuthenticated && !isAuthLoading
+  const { isPmRole } = useWorkspaceRole()
+  const roleView = isPmRole ? "PM" : "AM"
+
+  const apiCustomerOptionsQuery = useGetApiV1CustomersOptions({
+    query: { enabled: canQueryRealApi },
+  })
+  const apiPmOptionsQuery = useGetApiV1UsersOptions(
+    { role: "PM" },
+    { query: { enabled: canQueryRealApi } }
+  )
+  const createCustomerMutation = usePostApiV1Customers()
+  const createContractMutation = usePostApiV1Contracts()
+  const uploadFileMutation = usePostApiV1FilesUpload()
+
   const {
-    customers,
-    contracts,
-    selectedContract,
-    roleView,
     hidePrice,
     togglePriceVisible,
     formatMoney,
+    openContractDetail,
     setActiveScreen,
     setActiveDetailTab,
-    createCustomer,
-    createContract,
-    addScopeItem,
-    updateScopeItem,
-    removeScopeItem,
-    updateInstallment,
-    addInstallment,
-    removeInstallment,
-    addContractDocument,
-    removeContractDocument,
-    approveKickoffByBod,
-    updateKickoffChecklist,
-    updateTargetMandays,
-    updateContractPhase,
-  } = useAmPrototype()
+  } = useWorkspaceUi()
 
   const isCreateMode = mode === "create"
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
@@ -283,7 +324,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
   const [isEditingSchedule, setIsEditingSchedule] = React.useState(false)
   const [hideMoneyAllocationCol, setHideMoneyAllocationCol] =
     React.useState(false)
-  const showMoneyAllocationCol = roleView !== "PM" && !hideMoneyAllocationCol
+  const showMoneyAllocationCol = !isPmRole && !hideMoneyAllocationCol
 
   const [newCustomerModalOpen, setNewCustomerModalOpen] = React.useState(false)
   const [newCustName, setNewCustName] = React.useState("")
@@ -292,8 +333,15 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
   const [newCustAccEmail, setNewCustAccEmail] = React.useState("")
 
   // State cho chế độ Create New Contract
-  const [customerId, setCustomerId] = React.useState<string>(customers[0]?.id || "cust-01")
-  const [contractCode, setContractCode] = React.useState("HĐ-2026-112/DX-AI")
+  const [customerId, setCustomerId] = React.useState<string>("")
+  const [contractCode, setContractCode] = React.useState(() => {
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = String(now.getMonth() + 1).padStart(2, "0")
+    const d = String(now.getDate()).padStart(2, "0")
+    const suffix = String(now.getTime()).slice(-3)
+    return `HĐ-${y}-${m}${d}-${suffix}`
+  })
   const [contractName, setContractName] = React.useState(
     "HĐ Xây dựng Chatbot AI Tư vấn Pháp lý & Giỏ hàng BĐS"
   )
@@ -355,6 +403,8 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
     React.useState<number>(
       INITIAL_DRAFT_FINANCIAL_PARAMS.bufferCompressionPercent
     )
+  const [contractVatRatePercent, setContractVatRatePercent] =
+    React.useState<number>(0)
   const [invoiceMethod] = React.useState<InvoiceMethod>("BY_INSTALLMENT")
 
   // Danh mục MỐC BÀN GIAO KỸ THUẬT (Scope Milestones - Limit & Target tự tính từ Phân bổ tiền & Credit Y)
@@ -365,14 +415,15 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
     )
   )
 
-  // Lộ trình ĐỢT THANH TOÁN (Payment Tranches - độc lập nhưng liên kết với Mốc bàn giao)
+  // Lộ trình ĐỢT THANH TOÁN (Payment Tranches - hỗ trợ liên kết 1-1 hoặc N-1 nhiều Mốc)
   const [installments, setInstallments] = React.useState<DraftInstallmentRow[]>([
     {
       id: "d-1",
       name: "Đợt 1: Tạm ứng ngay sau khi ký HĐ (30%)",
       percentage: 30,
       dueDate: "2026-11-05",
-      linkedMilestoneId: "s-1",
+      linkedMilestoneId: "",
+      linkedMilestoneIds: [],
       triggerMilestoneName: "Ký Hợp đồng & Hoàn tất Checklist Kick-off",
     },
     {
@@ -381,6 +432,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
       percentage: 30,
       dueDate: "2026-11-28",
       linkedMilestoneId: "s-1",
+      linkedMilestoneIds: ["s-1"],
       triggerMilestoneName: "Hoàn thành Mốc 1: Foundation",
     },
     {
@@ -389,6 +441,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
       percentage: 20,
       dueDate: "2026-12-28",
       linkedMilestoneId: "s-2",
+      linkedMilestoneIds: ["s-2"],
       triggerMilestoneName: "Hoàn thành Mốc 2: Core Chatbot",
     },
     {
@@ -397,19 +450,75 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
       percentage: 20,
       dueDate: "2027-01-30",
       linkedMilestoneId: "s-3",
+      linkedMilestoneIds: ["s-3"],
       triggerMilestoneName: "Hoàn thành Mốc 3: Đào tạo & Bàn giao",
     },
   ])
 
-  const activeContract = isCreateMode ? null : selectedContract
-  const detailMetrics = activeContract ? calculateContractMetrics(activeContract) : null
-  const kickoffEval = activeContract ? evaluateKickoffChecklist(activeContract) : null
+  const activeContract = null as ContractProject | null
+  const detailMetrics = null as ReturnType<typeof calculateContractMetrics> | null
+  const kickoffEval = null as ReturnType<typeof evaluateKickoffChecklist> | null
 
-  const effectiveCustomerId = activeContract ? activeContract.customerId : customerId
-  const selectedCustomerObj = React.useMemo(
-    () => customers.find((c) => c.id === effectiveCustomerId) || customers[0],
-    [customers, effectiveCustomerId]
-  )
+  // Tự động đồng bộ Checklist Pre-Project theo dữ liệu thực tế nhập trên Form
+  React.useEffect(() => {
+    if (!isCreateMode) return
+    const hasDrive = Boolean(googleDriveUrlDraft.trim())
+    const hasScope = scopeRows.length > 0
+    const hasTimeline = Boolean(startDate && expectedEndDate)
+    const totalBg = scopeRows.reduce(
+      (acc, r) => acc + Number(r.handoverEstimatedMandays ?? 0),
+      0
+    )
+    setDraftChecklist((prev) => ({
+      ...prev,
+      driveRootCreated: hasDrive,
+      driveTeamDocCreated: hasDrive,
+      driveSharedDocCreated: hasDrive,
+      drivePermissionsGranted: hasDrive,
+      pmConfirmedScope: hasScope,
+      kickoffTimelineConfirmed: hasTimeline,
+      kickoffDate: startDate || prev.kickoffDate,
+      handoverEstimateConfirmed: totalBg > 0,
+      handoverEstimateMandays: totalBg,
+    }))
+  }, [isCreateMode, googleDriveUrlDraft, scopeRows, startDate, expectedEndDate])
+
+  const apiCustomerOptions = apiCustomerOptionsQuery.data?.data || []
+  const apiPmOptions = apiPmOptionsQuery.data?.data || []
+
+  React.useEffect(() => {
+    if (!canQueryRealApi) return
+    if (apiCustomerOptions.length > 0) {
+      const existsInApi = apiCustomerOptions.some((c) => c.customer_id === customerId)
+      if (!existsInApi && apiCustomerOptions[0]?.customer_id) {
+        setCustomerId(apiCustomerOptions[0].customer_id)
+      }
+    } else {
+      setCustomerId("")
+    }
+  }, [canQueryRealApi, apiCustomerOptions, customerId])
+
+  const selectedCustomerDetailQuery = useGetApiV1CustomersId(customerId || "", {
+    query: { enabled: canQueryRealApi && Boolean(customerId) },
+  })
+
+  const selectedCustomerObj = React.useMemo(() => {
+    const matched = apiCustomerOptions.find((c) => c.customer_id === customerId)
+    const detail = selectedCustomerDetailQuery.data?.data
+    return {
+      id: detail?.customer_id || matched?.customer_id || "",
+      companyName: detail?.name || matched?.name || "Chưa chọn khách hàng",
+      taxCode: detail?.tax_code || matched?.tax_code || "—",
+      techContact: {
+        name: detail?.tech_contact?.name || "Chưa cập nhật",
+        phone: detail?.tech_contact?.phone || "—",
+      },
+      accountingContact: {
+        name: detail?.accounting_contact?.name || "Chưa cập nhật",
+        email: detail?.accounting_contact?.email || "—",
+      },
+    }
+  }, [apiCustomerOptions, customerId, selectedCustomerDetailQuery.data])
 
   const displayedDocuments: ProjectDocument[] = React.useMemo(() => {
     if (isCreateMode) return draftDocs
@@ -438,8 +547,8 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
   }, [isCreateMode, draftDocs, activeContract])
 
   const createTaxBreakdown = React.useMemo(
-    () => calculateTaxBreakdownFromItems(scopeRows),
-    [scopeRows]
+    () => computeContractTaxWithRate(scopeRows, contractVatRatePercent),
+    [scopeRows, contractVatRatePercent]
   )
 
   const baseContractValue = isCreateMode
@@ -448,7 +557,9 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
 
   const effectiveRate = isCreateMode
     ? standardMandayRate
-    : activeContract?.standardMandayRate || 2_500_000
+    : activeContract
+      ? getEffectiveMandayRate(activeContract)
+      : 0
 
   const effectiveFixedCost = isCreateMode
     ? fixedCostAllocation
@@ -488,8 +599,11 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
       })
 
   const displayedTaxBreakdown = React.useMemo(
-    () => calculateTaxBreakdownFromItems(displayedScopeRows),
-    [displayedScopeRows]
+    () =>
+      isCreateMode
+        ? createTaxBreakdown
+        : computeContractTaxWithRate(displayedScopeRows, activeContract?.vatRatePercent),
+    [isCreateMode, createTaxBreakdown, displayedScopeRows, activeContract?.vatRatePercent]
   )
 
   const totalScopeLimitMd = displayedScopeRows.reduce(
@@ -542,9 +656,57 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
       riskReservePercent,
       standardMandayRate,
       bufferCompressionPercent,
+      contractVatRatePercent,
       ...overrides,
     }
     setScopeRows(distributeScopeLimitsAndTargets(nextRows, params))
+  }
+
+  const syncRateFromCreditAndRows = (
+    nextRows: DraftScopeRow[],
+    overrides?: Partial<CreditParams>
+  ) => {
+    const params: CreditParams = {
+      fixedCostAllocation,
+      salesCommissionAmount,
+      riskReservePercent,
+      standardMandayRate,
+      bufferCompressionPercent,
+      contractVatRatePercent,
+      ...overrides,
+    }
+    const { creditY: nextCreditY } = computeAllowedContractMaxMandays(nextRows, params)
+    const nextTotalLimit = nextRows.reduce(
+      (sum, r) => sum + Math.max(0, Number(r.limitMandays || 0)),
+      0
+    )
+    if (nextTotalLimit > 0 && nextCreditY > 0) {
+      setStandardMandayRate(Math.floor(nextCreditY / nextTotalLimit))
+    } else {
+      setStandardMandayRate(0)
+    }
+  }
+
+  const handleRecalcMandayRateByLimit = () => {
+    if (totalScopeLimitMd <= 0) {
+      toast.error("Tổng Limit các Mốc phải lớn hơn 0 MD để tính Đơn giá 1 MD")
+      return
+    }
+    if (creditY <= 0) {
+      toast.error("Credit Y đang ≤ 0 VNĐ — vui lòng kiểm tra lại giá trị HĐ và các khoản khấu trừ")
+      return
+    }
+    const nextRate = Math.floor(creditY / totalScopeLimitMd)
+    if (nextRate < 100_000) {
+      toast.error(
+        `Đơn giá quy đổi (${nextRate.toLocaleString("vi-VN")} đ/MD) nhỏ hơn mức tối thiểu 100.000 đ/MD. Vui lòng giảm Tổng Limit hoặc tăng Credit Y.`
+      )
+      return
+    }
+    setStandardMandayRate(nextRate)
+    toast.success(
+      `Đã tính lại Đơn giá 1 MD = ${formatMoney(nextRate)}/MD (${formatMoney(creditY)} ÷ ${totalScopeLimitMd} MD)`
+    )
   }
 
   const handleCompressionPercentChange = (nextPct: number) => {
@@ -567,157 +729,137 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
         0
       )
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     const sizeMb = `${Math.max(0.1, file.size / (1024 * 1024)).toFixed(1)} MB`
 
-    if (isCreateMode) {
-      setDraftDocs((prev) => [
-        ...prev,
-        {
-          id: `doc-${Date.now()}`,
-          fileName: file.name,
-          fileSize: sizeMb,
-          category: uploadCategory,
-          uploadedAt: new Date().toISOString().slice(0, 10),
-          uploadedBy: "Thảo (AM)",
-        },
-      ])
-      toast.success(`Đã tải tài liệu "${file.name}" lên hệ thống!`)
-    } else if (activeContract) {
-      addContractDocument(activeContract.id, {
+    let uploadedUrl: string | undefined
+    if (canQueryRealApi) {
+      try {
+        const res = await uploadFileMutation.mutateAsync({
+          data: {
+            file,
+            contract_id: !isCreateMode && activeContract ? activeContract.id : undefined,
+            category: uploadCategory,
+          },
+        })
+        uploadedUrl = res?.data?.url
+      } catch {
+        toast.error(`Không thể tải tệp "${file.name}" lên máy chủ`)
+        e.target.value = ""
+        return
+      }
+    }
+
+    setDraftDocs((prev) => [
+      ...prev,
+      {
+        id: `doc-${Date.now()}`,
         fileName: file.name,
         fileSize: sizeMb,
         category: uploadCategory,
-        uploadedBy: "Thảo (AM)",
-      })
-    }
+        uploadedAt: new Date().toISOString().slice(0, 10),
+        uploadedBy: user?.full_name || "AM",
+      },
+    ])
+    toast.success(
+      uploadedUrl
+        ? `Đã tải tài liệu "${file.name}" lên máy chủ!`
+        : `Đã đính kèm tài liệu "${file.name}"!`
+    )
     e.target.value = ""
   }
 
   const handleRemoveDoc = (docId: string) => {
-    if (isCreateMode) {
-      setDraftDocs((prev) => prev.filter((d) => d.id !== docId))
-    } else if (activeContract) {
-      removeContractDocument(activeContract.id, docId)
-    }
+    setDraftDocs((prev) => prev.filter((d) => d.id !== docId))
   }
 
   const handleAddScopeRow = () => {
-    if (isCreateMode) {
-      const nextIdx = scopeRows.length + 1
-      const nextRows: DraftScopeRow[] = [
-        ...scopeRows,
-        {
-          id: `s-${Date.now()}`,
-          code: `MỐC-0${nextIdx}`,
-          title: `Mốc ${nextIdx}: Hạng mục bàn giao kỹ thuật #${nextIdx}`,
-          ownerPic: "Chị Giang (PM Tổng)",
-          dueDate: expectedEndDate,
-          amountBeforeVat: 50_000_000,
-          vatCategory: "NON_VAT",
-          limitMandays: 0,
-          targetMandays: 0,
-          estimatedMandays: 12,
-          handoverEstimatedMandays: 2,
-        },
-      ]
-      applyFinancialRecalc(nextRows)
-    } else if (activeContract) {
-      const nextIdx = activeContract.scopeItems.length + 1
-      addScopeItem(activeContract.id, {
+    const nextIdx = scopeRows.length + 1
+    const nextRows: DraftScopeRow[] = [
+      ...scopeRows,
+      {
+        id: `s-${Date.now()}`,
         code: `MỐC-0${nextIdx}`,
         title: `Mốc ${nextIdx}: Hạng mục bàn giao kỹ thuật #${nextIdx}`,
-        moduleName: "Core",
-        ownerPic: activeContract.pmOwner,
-        description: `Mốc ${nextIdx}: Hạng mục bàn giao kỹ thuật #${nextIdx}`,
-        source: "BASELINE",
-        dueDate: activeContract.expectedEndDate,
-        status: "NOT_STARTED",
-        progressPercent: 0,
+        ownerPic: pmOwner || "PM Dự án",
+        dueDate: expectedEndDate,
         amountBeforeVat: 50_000_000,
         vatCategory: "NON_VAT",
-        limitMandays: 15,
-        targetMandays: 12,
+        limitMandays: 0,
+        targetMandays: 0,
         estimatedMandays: 12,
         handoverEstimatedMandays: 2,
-        actualMandays: 0,
-        isAccepted: false,
-      })
-      setIsEditingScope(true)
-    }
+      },
+    ]
+    applyFinancialRecalc(nextRows)
   }
 
   const handleAddInstallmentRow = () => {
     const currentSum = totalInstallmentPercent
     const suggestedRemaining = Math.max(0, 100 - currentSum)
-
-    if (isCreateMode) {
-      const nextIndex = installments.length + 1
-      setInstallments([
-        ...installments,
-        {
-          id: `d-${Date.now()}`,
-          name: `Đợt ${nextIndex}: Thanh toán theo tiến độ dòng tiền`,
-          percentage: suggestedRemaining || 20,
-          dueDate: expectedEndDate,
-          linkedMilestoneId: scopeRows[0]?.id || "",
-          triggerMilestoneName: `Hoàn thành Mốc liên kết đợt ${nextIndex}`,
-        },
-      ])
-    } else if (activeContract) {
-      const nextIndex = activeContract.installments.length + 1
-      const pct = suggestedRemaining || 20
-      const amt = Math.round((activeContract.baseContractValue * pct) / 100)
-      const vatAmt = Math.round((activeContract.vatPortionAmount * pct) / 100)
-      addInstallment(activeContract.id, {
+    const nextIndex = installments.length + 1
+    const firstId = scopeRows[0]?.id || ""
+    setInstallments([
+      ...installments,
+      {
+        id: `d-${Date.now()}`,
         name: `Đợt ${nextIndex}: Thanh toán theo tiến độ dòng tiền`,
-        percentage: pct,
-        amount: amt,
-        vatAmount: vatAmt,
-        nonVatAmount: amt - vatAmt,
-        dueDate: activeContract.expectedEndDate,
-        linkedMilestoneId: activeContract.scopeItems[0]?.id,
+        percentage: suggestedRemaining || 20,
+        dueDate: expectedEndDate,
+        linkedMilestoneId: firstId,
+        linkedMilestoneIds: firstId ? [firstId] : [],
         triggerMilestoneName: `Hoàn thành Mốc liên kết đợt ${nextIndex}`,
-        paymentStatus: "PENDING",
-        vatInvoiceStatus: "NOT_YET",
-      })
-      setIsEditingSchedule(true)
-    }
+      },
+    ])
   }
 
-  const handleQuickCreateCustomer = () => {
+  const handleQuickCreateCustomer = async () => {
     if (!newCustName.trim() || !newCustTax.trim()) {
       toast.error("Vui lòng nhập Tên công ty và Mã số thuế")
       return
     }
-    const created = createCustomer({
-      code: `KH-${newCustTax.slice(-4)}`,
-      companyName: newCustName.trim(),
-      taxCode: newCustTax.trim(),
-      industry: "Doanh nghiệp",
-      address: "TP. Hồ Chí Minh",
-      techContact: {
-        name: newCustTechName || "Đại diện Kỹ thuật",
-        title: "IT Manager",
-        phone: "0909 000 111",
-        email: "tech@partner.vn",
-      },
-      accountingContact: {
-        name: "Phòng Kế toán",
-        title: "Kế toán thanh toán",
-        phone: "0909 000 222",
-        email: newCustAccEmail || "accounting@partner.vn",
-      },
-    })
-    setCustomerId(created.id)
-    setNewCustomerModalOpen(false)
-    setNewCustName("")
-    setNewCustTax("")
+    if (!canQueryRealApi) {
+      toast.error("Vui lòng đăng nhập để tạo khách hàng")
+      return
+    }
+    try {
+      const res = await createCustomerMutation.mutateAsync({
+        data: {
+          name: newCustName.trim(),
+          tax_code: newCustTax.trim(),
+          industry: "Doanh nghiệp",
+          address: "TP. Hồ Chí Minh",
+          tech_contact: {
+            name: newCustTechName || "Đại diện Kỹ thuật",
+            title: "IT Manager",
+            phone: "0909 000 111",
+            email: "tech@partner.vn",
+          },
+          accounting_contact: {
+            name: "Phòng Kế toán",
+            title: "Kế toán thanh toán",
+            phone: "0909 000 222",
+            email: newCustAccEmail || "accounting@partner.vn",
+          },
+        },
+      })
+      if (res?.data?.customer_id) {
+        setCustomerId(res.data.customer_id)
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/customers/options"] })
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/customers"] })
+      toast.success(`Đã tạo khách hàng "${newCustName.trim()}" vào CSDL`)
+      setNewCustomerModalOpen(false)
+      setNewCustName("")
+      setNewCustTax("")
+    } catch {
+      toast.error("Không thể tạo khách hàng (trùng MST hoặc dữ liệu không hợp lệ)")
+    }
   }
 
-  const handleCreateContractSubmit = () => {
+  const handleCreateContractSubmit = async () => {
     if (!contractCode.trim() || !contractName.trim()) {
       toast.error("Vui lòng nhập Mã hợp đồng và Tên hợp đồng/dự án")
       return
@@ -741,6 +883,12 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
       )
       return
     }
+    if (!installments[0] || Number(installments[0].percentage || 0) <= 0) {
+      toast.error(
+        "Bắt buộc phải có Đợt 1 Tạm ứng (> 0%) ngay sau khi ký HĐ để kiểm soát điều kiện bắt đầu dự án!"
+      )
+      return
+    }
     if (totalInstallmentPercent !== 100) {
       toast.error(
         `Tổng tỉ lệ các đợt thanh toán đang là ${totalInstallmentPercent}%. Vui lòng điều chỉnh đủ 100%!`
@@ -748,125 +896,95 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
       return
     }
 
-    const totalVal = createTaxBreakdown.grandTotalWithTax
-    const taxablePortion =
-      createTaxBreakdown.vatBaseTotal + createTaxBreakdown.totalVatTax
-    const nonVatPortion = createTaxBreakdown.nonVatTotal
-
-    const newContract: ContractProject = {
-      id: `ctr-${Date.now()}`,
-      contractCode: contractCode.trim(),
-      projectName: contractName.trim(),
-      customerId: selectedCustomerObj.id,
-      customerName: selectedCustomerObj.companyName,
-      signedDate: new Date().toISOString().slice(0, 10),
-      startDate,
-      expectedEndDate,
-      amOwner: "Thảo (AM)",
-      pmOwner,
-      phase: "PRE_PROJECT",
-      amCustomTags: ["Hợp đồng mới"],
-      checkCycleDays: 2,
-      lastCheckInDate: new Date().toISOString().slice(0, 10),
-      kickoffChecklist: {
-        ...draftChecklist,
-        handoverEstimateMandays: totalHandoverEstimatedMd || draftChecklist.handoverEstimateMandays,
-      },
-      documents: draftDocs,
-      googleDriveUrl: googleDriveUrlDraft,
-      drivePermissionsVerified:
-        draftChecklist.driveRootCreated &&
-        draftChecklist.driveTeamDocCreated &&
-        draftChecklist.driveSharedDocCreated &&
-        draftChecklist.drivePermissionsGranted,
-      bodAllowKickoffWithoutAdvance: false,
-      baseContractValue: totalVal,
-      approvedUpsellValue: 0,
-      fixedCostAllocation,
-      salesCommissionAmount,
-      riskReservePercent,
-      standardMandayRate,
-      initialMaxMandays: maxMandays,
-      upsellAddedMandays: 0,
-      amTargetMandays,
-      pmEstimatedMandays: totalScopeEstimatedMd,
-      actualConsumedMandays: 0,
-      hasVatItems: taxablePortion > 0,
-      hasNonVatItems: nonVatPortion > 0,
-      vatRatePercent: createTaxBreakdown.vat8Base > 0 ? 8 : 10,
-      vatPortionAmount: taxablePortion,
-      nonVatPortionAmount: nonVatPortion,
-      invoiceMethod,
-      externalAccountantNote: `Tự động tách từ bảng Mốc bàn giao.`,
-      manualForceRedFlag: false,
-      quickActionBlocker:
-        "Vừa khởi tạo hợp đồng — Chờ hoàn tất Checklist 4 điều kiện Kick-off & Tạm ứng Đợt 1",
-      kpiBonusSplitPercent: 50,
-      installments: installments.map((inst, idx) => {
-        const amt = Math.round((totalVal * inst.percentage) / 100)
-        const vatAmt = Math.round((taxablePortion * inst.percentage) / 100)
-        return {
-          id: `inst-new-${idx}-${Date.now()}`,
-          name: inst.name,
-          percentage: inst.percentage,
-          amount: amt,
-          vatAmount: vatAmt,
-          nonVatAmount: amt - vatAmt,
-          dueDate: inst.dueDate,
-          linkedMilestoneId: inst.linkedMilestoneId,
-          triggerMilestoneName: inst.triggerMilestoneName,
-          paymentStatus: idx === 0 ? "INVOICED" : "PENDING",
-          vatInvoiceStatus: idx === 0 ? "SENT_TO_ACCOUNTANT" : "NOT_YET",
-        }
-      }),
-      scopeItems: scopeRows.map((r, idx) => ({
-        id: r.id || `sc-new-${idx}-${Date.now()}`,
-        code: r.code || `MỐC-0${idx + 1}`,
-        title: r.title || `Mốc bàn giao #${idx + 1}`,
-        moduleName: "Core",
-        ownerPic: r.ownerPic || pmOwner,
-        description: r.title,
-        source: "BASELINE",
-        dueDate: r.dueDate || expectedEndDate,
-        status: "NOT_STARTED",
-        progressPercent: 0,
-        pmNote: "",
-        blockerNote: "",
-        amountBeforeVat: Number(r.amountBeforeVat) || 0,
-        vatCategory: r.vatCategory,
-        limitMandays: Math.max(0, Number(r.limitMandays ?? 0)),
-        targetMandays: Math.max(0, Number(r.targetMandays ?? 0)),
-        estimatedMandays: Math.max(0, Number(r.estimatedMandays ?? 0)),
-        handoverEstimatedMandays: Math.max(
-          0,
-          Number(r.handoverEstimatedMandays ?? 0)
-        ),
-        actualMandays: 0,
-        isAccepted: false,
-      })),
-      milestones: [],
-      checkIns: [],
-      changeRequests: [],
-      handover: {
-        sourceCodeDelivered: false,
-        userGuideAndVideoDelivered: false,
-        signedAcceptanceScanUploaded: false,
-      },
+    if (!canQueryRealApi) {
+      toast.error("Vui lòng đăng nhập để tạo Hợp đồng")
+      return
     }
-
-    createContract(newContract)
+    if (!customerId) {
+      toast.error("Vui lòng chọn hoặc tạo mới một Khách hàng trước khi lập Hợp đồng")
+      return
+    }
+    try {
+      const matchedPm = apiPmOptions.find(
+        (p) => p.user_id === pmOwner || p.full_name === pmOwner
+      )
+      const createdRes = await createContractMutation.mutateAsync({
+        data: {
+          code: contractCode.trim(),
+          name: contractName.trim(),
+          customer_id: customerId,
+          owner_pm_id: matchedPm?.user_id || null,
+          signed_date: new Date().toISOString().slice(0, 10),
+          start_date: startDate,
+          end_date: expectedEndDate,
+          check_cycle_days: 2,
+          fixed_cost_allocation: fixedCostAllocation,
+          sales_commission_amount: salesCommissionAmount,
+          risk_reserve_percent: riskReservePercent,
+          standard_manday_rate: standardMandayRate,
+          compression_ratio: bufferCompressionPercent / 100,
+          vat_rate_percent: contractVatRatePercent,
+          invoice_method: invoiceMethod,
+          drive_root_url: googleDriveUrlDraft,
+          kickoff_checklist: {
+            ...draftChecklist,
+            handoverEstimateMandays:
+              totalHandoverEstimatedMd || draftChecklist.handoverEstimateMandays,
+          },
+          scope_items: scopeRows.map((r, idx) => ({
+            temp_key: r.id,
+            code: r.code || `MỐC-0${idx + 1}`,
+            title: r.title || `Mốc bàn giao #${idx + 1}`,
+            owner_pic: r.ownerPic || pmOwner,
+            amount_before_vat: Number(r.amountBeforeVat) || 0,
+            vat_category: r.vatCategory,
+            limit_mandays: Math.max(0, Number(r.limitMandays ?? 0)),
+            target_mandays: Math.max(0, Number(r.targetMandays ?? 0)),
+            estimated_mandays: Math.max(0, Number(r.estimatedMandays ?? 0)),
+            handover_estimated_mandays: Math.max(
+              0,
+              Number(r.handoverEstimatedMandays ?? 0)
+            ),
+            due_date: r.dueDate || expectedEndDate,
+          })),
+          installments: installments.map((inst, idx) => ({
+            code: `DOT-${idx + 1}`,
+            label: inst.name,
+            trigger_type: idx === 0 ? "ADVANCE" : "MILESTONE",
+            percentage: Number(inst.percentage || 0),
+            due_date: inst.dueDate || null,
+            linked_milestone_keys:
+              inst.linkedMilestoneIds.length > 0
+                ? inst.linkedMilestoneIds
+                : inst.linkedMilestoneId
+                  ? [inst.linkedMilestoneId]
+                  : [],
+          })),
+        },
+      })
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/contracts"] })
+      toast.success(`Đã khởi tạo hợp đồng "${contractCode.trim()}" lên máy chủ!`)
+      const createdId = createdRes?.data?.contract_id
+      if (createdId) {
+        openContractDetail(createdId)
+      } else {
+        setActiveScreen("contracts")
+      }
+    } catch (err) {
+      const axiosErr = err as {
+        response?: { data?: { errors?: Array<{ message?: string }> } }
+      }
+      toast.error(
+        axiosErr?.response?.data?.errors?.[0]?.message ||
+          "Không thể khởi tạo hợp đồng trên máy chủ"
+      )
+    }
   }
 
-  const effectiveChecklist: PreKickoffChecklist = isCreateMode
-    ? draftChecklist
-    : kickoffEval?.checklist || draftChecklist
+  const effectiveChecklist: PreKickoffChecklist = draftChecklist
 
   const handleToggleChecklistField = (patch: Partial<PreKickoffChecklist>) => {
-    if (isCreateMode) {
-      setDraftChecklist((prev) => ({ ...prev, ...patch }))
-    } else if (activeContract) {
-      updateKickoffChecklist(activeContract.id, patch)
-    }
+    setDraftChecklist((prev) => ({ ...prev, ...patch }))
   }
 
   return (
@@ -955,74 +1073,9 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                Trước khi bấm <strong>Start dự án</strong> hoặc <strong>Start mốc mới</strong>, AM Thảo bắt buộc kiểm tra đủ 4 nhóm điều kiện dưới đây (Đặc biệt: Cấu trúc 3 thư mục Google Drive & Dự toán thời gian bàn giao Handover).
+                Trước khi bấm <strong>Start dự án</strong> hoặc <strong>Start mốc mới</strong>, AM bắt buộc kiểm tra đủ 4 nhóm điều kiện dưới đây (Đặc biệt: Cấu trúc 3 thư mục Google Drive & Dự toán thời gian bàn giao Handover).
               </p>
             </div>
-
-            {!isCreateMode && activeContract && detailMetrics && (
-              <div className="flex flex-wrap items-center gap-2">
-                {!detailMetrics.isFirstInstallmentPaid &&
-                  activeContract.installments[0] &&
-                  roleView !== "PM" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-xs border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50 gap-1"
-                      onClick={() =>
-                        updateInstallment(
-                          activeContract.id,
-                          activeContract.installments[0].id,
-                          {
-                            paymentStatus: "PAID",
-                            paidDate: new Date().toISOString().slice(0, 10),
-                          }
-                        )
-                      }
-                    >
-                      <IconCheck className="size-3.5" />
-                      1. Xác nhận Đã thu Tạm ứng Đợt 1
-                    </Button>
-                  )}
-
-                {!detailMetrics.isFirstInstallmentPaid &&
-                  !activeContract.bodAllowKickoffWithoutAdvance &&
-                  roleView === "BOD" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 text-xs border-amber-400 text-amber-900 bg-white hover:bg-amber-100 gap-1"
-                      onClick={() => approveKickoffByBod(activeContract.id)}
-                    >
-                      <IconShieldCheck className="size-3.5" />
-                      BOD duyệt ngoại lệ Tạm ứng
-                    </Button>
-                  )}
-
-                {activeContract.phase === "PRE_PROJECT" && (
-                  <Button
-                    size="sm"
-                    disabled={!detailMetrics.canKickoffToInProject}
-                    onClick={() => {
-                      updateContractPhase(activeContract.id, "IN_PROJECT")
-                      setActiveDetailTab("in-project")
-                    }}
-                    className="h-8 text-xs gap-1.5"
-                  >
-                    {detailMetrics.canKickoffToInProject ? (
-                      <>
-                        <IconPlayerPlay className="size-3.5" />
-                        Start Dự Án (Kick-off sang In-Project)
-                      </>
-                    ) : (
-                      <>
-                        <IconLock className="size-3.5" />
-                        Chưa đủ Checklist 4 mục & Tạm ứng Đợt 1
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-            )}
           </div>
         </CardHeader>
 
@@ -1168,12 +1221,11 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
         </CardContent>
       </Card>
 
-      {/* Bố cục 2 cột thoáng đãng */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Cột trái (7 phần): Thông tin Hợp đồng + Bảng MỐC BÀN GIAO (Scope Milestone) */}
-        <div className="lg:col-span-7 space-y-6">
-          <Card className="shadow-none border bg-card">
-            <CardHeader className="pb-3 border-b">
+      {/* Bố cục lưới 2x2 đều nhau 4 ô — chiều cao đồng nhất gọn gàng, không khoảng trắng thừa */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+        {/* Ô 1 (Hàng 1 - Trái): Thông tin Hợp đồng, Khách hàng & Tài liệu */}
+        <Card className="shadow-none border bg-card lg:h-[460px] min-w-0 flex flex-col overflow-hidden lg:order-1">
+            <CardHeader className="py-3 px-4 border-b shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold">
                   1. Định Danh Hợp Đồng, Khách Hàng (1-N) & Lưu Trữ Tài Liệu
@@ -1192,24 +1244,27 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
               </div>
             </CardHeader>
 
-            <CardContent className="p-5 space-y-4">
+            <CardContent className="p-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2 space-y-1.5">
                   <Label className="text-xs">Khách hàng doanh nghiệp</Label>
                   {isCreateMode ? (
                     <Select value={customerId} onValueChange={setCustomerId}>
                       <SelectTrigger className="h-9 text-xs">
-                        <SelectValue />
+                        <SelectValue placeholder="Chọn khách hàng..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {customers.map((c) => {
-                          const count = contracts.filter((ctr) => ctr.customerId === c.id).length
-                          return (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.companyName} (MST: {c.taxCode} • Đã ký {count} HĐ)
+                        {apiCustomerOptions.length > 0 ? (
+                          apiCustomerOptions.map((c) => (
+                            <SelectItem key={c.customer_id} value={c.customer_id || ""}>
+                              {c.name} {c.tax_code ? `(MST: ${c.tax_code})` : ""}
                             </SelectItem>
-                          )
-                        })}
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">
+                            Chưa có khách hàng nào — hãy bấm &ldquo;+ Thêm nhanh KH&rdquo;.
+                          </div>
+                        )}
                       </SelectContent>
                     </Select>
                   ) : (
@@ -1369,9 +1424,9 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
             </CardContent>
           </Card>
 
-          {/* 2. MỐC BÀN GIAO KỸ THUẬT (SCOPE MILESTONES) - Tách biệt rõ với Đợt thanh toán, có Người phụ trách riêng & 4 chỉ số Tài chính */}
-          <Card className="shadow-none border bg-card">
-            <CardHeader className="pb-3 border-b">
+          {/* Ô 2 (Hàng 2 - Trái): MỐC BÀN GIAO KỸ THUẬT (SCOPE MILESTONES) - Tách biệt rõ với Đợt thanh toán, có Người phụ trách riêng & 4 chỉ số Tài chính */}
+          <Card className="shadow-none border bg-card lg:h-[460px] min-w-0 flex flex-col overflow-hidden lg:order-3">
+            <CardHeader className="py-3 px-4 border-b shrink-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <CardTitle className="text-sm font-semibold">
@@ -1431,7 +1486,8 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
               </div>
             </CardHeader>
 
-            <CardContent className="p-0 overflow-x-auto">
+            <CardContent className="p-0 flex-1 min-h-0 flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-auto">
               <Table>
                 <TableHeader className="bg-slate-50/80">
                   <TableRow>
@@ -1450,8 +1506,8 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                     <TableHead className="w-[100px] min-w-[96px] text-center text-xs text-primary">
                       Target
                     </TableHead>
-                    <TableHead className="w-[115px] min-w-[108px] text-center text-xs">
-                      Est (Gồm BG)
+                    <TableHead className="w-[138px] min-w-[132px] text-center text-xs">
+                      Est & BG (MD)
                     </TableHead>
                     {(isCreateMode || isEditingScope) && <TableHead className="w-[40px]" />}
                   </TableRow>
@@ -1472,15 +1528,9 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                             <Input
                               value={row.title}
                               onChange={(e) => {
-                                if (isCreateMode) {
-                                  const next = [...scopeRows]
-                                  next[idx] = { ...row, title: e.target.value }
-                                  setScopeRows(next)
-                                } else if (activeContract) {
-                                  updateScopeItem(activeContract.id, row.id, {
-                                    title: e.target.value,
-                                  })
-                                }
+                                const next = [...scopeRows]
+                                next[idx] = { ...row, title: e.target.value }
+                                setScopeRows(next)
                               }}
                               className="h-7 text-xs"
                             />
@@ -1488,15 +1538,9 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                               <Select
                                 value={row.ownerPic}
                                 onValueChange={(v) => {
-                                  if (isCreateMode) {
-                                    const next = [...scopeRows]
-                                    next[idx] = { ...row, ownerPic: v }
-                                    setScopeRows(next)
-                                  } else if (activeContract) {
-                                    updateScopeItem(activeContract.id, row.id, {
-                                      ownerPic: v,
-                                    })
-                                  }
+                                  const next = [...scopeRows]
+                                  next[idx] = { ...row, ownerPic: v }
+                                  setScopeRows(next)
                                 }}
                               >
                                 <SelectTrigger className="h-7 text-[11px] flex-1 min-w-[155px]">
@@ -1514,15 +1558,9 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                                 type="date"
                                 value={row.dueDate}
                                 onChange={(e) => {
-                                  if (isCreateMode) {
-                                    const next = [...scopeRows]
-                                    next[idx] = { ...row, dueDate: e.target.value }
-                                    setScopeRows(next)
-                                  } else if (activeContract) {
-                                    updateScopeItem(activeContract.id, row.id, {
-                                      dueDate: e.target.value,
-                                    })
-                                  }
+                                  const next = [...scopeRows]
+                                  next[idx] = { ...row, dueDate: e.target.value }
+                                  setScopeRows(next)
                                 }}
                                 className="h-7 text-[11px] w-[132px] shrink-0"
                               />
@@ -1575,15 +1613,10 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                                   value={row.amountBeforeVat}
                                   onChange={(e) => {
                                     const val = Math.max(0, Number(e.target.value) || 0)
-                                    if (isCreateMode) {
-                                      const next = [...scopeRows]
-                                      next[idx] = { ...row, amountBeforeVat: val }
-                                      applyFinancialRecalc(next)
-                                    } else if (activeContract) {
-                                      updateScopeItem(activeContract.id, row.id, {
-                                        amountBeforeVat: val,
-                                      })
-                                    }
+                                    const next = [...scopeRows]
+                                    next[idx] = { ...row, amountBeforeVat: val }
+                                    setScopeRows(next)
+                                    syncRateFromCreditAndRows(next)
                                   }}
                                   className="h-7 text-xs tabular-nums min-w-[138px]"
                                 />
@@ -1598,56 +1631,27 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                         </TableCell>
                       )}
 
-                      {/* 1. Limit MD (Khóa tổng <= Credit Y / Đơn giá) */}
+                      {/* 1. Limit MD (Chỉnh tự do -> Đơn giá 1 MD tự tính động = Credit Y / Tổng Limit) */}
                       {roleView !== "PM" && (
                         <TableCell className="text-center text-xs font-bold align-top py-3">
                           {isCreateMode || isEditingScope ? (
                             <Input
                               type="number"
                               min={0}
-                              max={
-                                row.limitMandays +
-                                Math.max(0, allowedTotalMaxMandays - totalScopeLimitMd)
-                              }
                               value={row.limitMandays}
                               onChange={(e) => {
-                                const rawMd = Math.max(0, Number(e.target.value) || 0)
-                                const otherSum = displayedScopeRows.reduce(
-                                  (sum, r, i) =>
-                                    i === idx ? sum : sum + Number(r.limitMandays || 0),
-                                  0
-                                )
-                                const maxForRow = Math.max(
-                                  0,
-                                  allowedTotalMaxMandays - otherSum
-                                )
-                                const clampedMd =
-                                  rawMd > maxForRow ? maxForRow : rawMd
-                                if (rawMd > maxForRow) {
-                                  toast.warning(
-                                    `Khóa trần Credit Y: Tổng Limit tối đa ${allowedTotalMaxMandays} MD (Mốc ${row.code} chỉ nhận tối đa ${maxForRow} MD)!`
-                                  )
+                                const nextMd = Math.max(0, Number(e.target.value) || 0)
+                                const next = [...scopeRows]
+                                next[idx] = {
+                                  ...row,
+                                  limitMandays: nextMd,
+                                  targetMandays: Math.min(
+                                    row.targetMandays,
+                                    nextMd
+                                  ),
                                 }
-                                if (isCreateMode) {
-                                  const next = [...scopeRows]
-                                  next[idx] = {
-                                    ...row,
-                                    limitMandays: clampedMd,
-                                    targetMandays: Math.min(
-                                      row.targetMandays,
-                                      clampedMd
-                                    ),
-                                  }
-                                  setScopeRows(next)
-                                } else if (activeContract) {
-                                  updateScopeItem(activeContract.id, row.id, {
-                                    limitMandays: clampedMd,
-                                    targetMandays: Math.min(
-                                      row.targetMandays,
-                                      clampedMd
-                                    ),
-                                  })
-                                }
+                                setScopeRows(next)
+                                syncRateFromCreditAndRows(next)
                               }}
                               className="h-7 text-xs text-center tabular-nums min-w-[78px]"
                             />
@@ -1673,15 +1677,9 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                                   `Mức giao PM (Target) không được vượt quá Limit (${row.limitMandays} MD) của ${row.code}!`
                                 )
                               }
-                              if (isCreateMode) {
-                                const next = [...scopeRows]
-                                next[idx] = { ...row, targetMandays: clampedMd }
-                                setScopeRows(next)
-                              } else if (activeContract) {
-                                updateScopeItem(activeContract.id, row.id, {
-                                  targetMandays: clampedMd,
-                                })
-                              }
+                              const next = [...scopeRows]
+                              next[idx] = { ...row, targetMandays: clampedMd }
+                              setScopeRows(next)
                             }}
                             className="h-7 text-xs text-center tabular-nums min-w-[78px]"
                           />
@@ -1690,28 +1688,50 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                         )}
                       </TableCell>
 
-                      {/* 3. Estimate MD (gồm cả Handover MD) */}
+                      {/* 3. Estimate MD + ô nhập BG (Bàn giao) riêng từng Mốc */}
                       <TableCell className="text-center text-xs align-top py-3">
                         {isCreateMode || isEditingScope ? (
-                          <div className="space-y-1">
-                            <Input
-                              type="number"
-                              min={0}
-                              value={row.estimatedMandays}
-                              onChange={(e) => {
-                                const md = Math.max(0, Number(e.target.value) || 0)
-                                if (isCreateMode) {
+                          <div className="space-y-1.5 min-w-[114px]">
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-slate-500 w-7 text-left shrink-0">
+                                Est:
+                              </span>
+                              <Input
+                                type="number"
+                                min={0}
+                                value={row.estimatedMandays}
+                                onChange={(e) => {
+                                  const md = Math.max(0, Number(e.target.value) || 0)
                                   const next = [...scopeRows]
                                   next[idx] = { ...row, estimatedMandays: md }
                                   setScopeRows(next)
-                                } else if (activeContract) {
-                                  updateScopeItem(activeContract.id, row.id, {
-                                    estimatedMandays: md,
-                                  })
-                                }
-                              }}
-                              className="h-7 text-xs text-center tabular-nums min-w-[82px]"
-                            />
+                                }}
+                                className="h-7 text-xs text-center tabular-nums"
+                              />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-amber-700 font-medium w-7 text-left shrink-0">
+                                BG:
+                              </span>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={row.estimatedMandays}
+                                value={row.handoverEstimatedMandays}
+                                onChange={(e) => {
+                                  const bgMd = Math.max(0, Number(e.target.value) || 0)
+                                  const nextEst = Math.max(row.estimatedMandays, bgMd)
+                                  const next = [...scopeRows]
+                                  next[idx] = {
+                                    ...row,
+                                    handoverEstimatedMandays: bgMd,
+                                    estimatedMandays: nextEst,
+                                  }
+                                  setScopeRows(next)
+                                }}
+                                className="h-7 text-xs text-center tabular-nums border-amber-200 bg-amber-50/40"
+                              />
+                            </div>
                           </div>
                         ) : (
                           <div>
@@ -1732,14 +1752,10 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                             size="icon-sm"
                             className="h-7 w-7 text-muted-foreground hover:text-destructive"
                             onClick={() => {
-                              if (isCreateMode) {
-                                if (scopeRows.length > 1) {
-                                  applyFinancialRecalc(
-                                    scopeRows.filter((r) => r.id !== row.id)
-                                  )
-                                }
-                              } else if (activeContract) {
-                                removeScopeItem(activeContract.id, row.id)
+                              if (scopeRows.length > 1) {
+                                applyFinancialRecalc(
+                                  scopeRows.filter((r) => r.id !== row.id)
+                                )
                               }
                             }}
                           >
@@ -1751,8 +1767,9 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                   ))}
                 </TableBody>
               </Table>
+              </div>
 
-              <div className="p-4 border-t bg-slate-50/70 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="px-4 py-3 border-t bg-slate-50/70 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs shrink-0">
                 <div>
                   <span className="text-muted-foreground block">
                     Tổng Limit / Trần Credit Y:
@@ -1801,12 +1818,10 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
               </div>
             </CardContent>
           </Card>
-        </div>
 
-        {/* Cột phải (5 phần): Cấu hình 4 chỉ số Tài chính & ĐỢT THANH TOÁN (Payment Tranches) liên kết với Mốc */}
-        <div className="lg:col-span-5 space-y-6">
-          <Card className="shadow-none border bg-card">
-            <CardHeader className="pb-3 border-b">
+        {/* Ô 3 (Hàng 1 - Phải): Cấu hình 4 chỉ số Tài chính & Cơ chế thưởng 50/50 */}
+        <Card className="shadow-none border bg-card lg:h-[460px] min-w-0 flex flex-col overflow-hidden lg:order-2">
+            <CardHeader className="py-3 px-4 border-b shrink-0">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold">
                   3. Mô Hình 4 Chỉ Số Tài Chính & Cơ Chế Thưởng 50/50
@@ -1831,7 +1846,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
               </div>
             </CardHeader>
 
-            <CardContent className="p-5 space-y-4 text-xs">
+            <CardContent className="p-4 space-y-3 text-xs flex-1 min-h-0 overflow-y-auto">
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border bg-slate-50/80 p-3">
                   <span className="text-[11px] text-muted-foreground block">
@@ -1896,7 +1911,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                     <br />• <strong>50% còn lại</strong> chia thưởng cho <strong>Lead/PM, Dev và Sale/AM</strong> (hoặc dồn thưởng KPI/tháng 13).
                   </p>
                   <div className="flex justify-between pt-1 border-t border-emerald-200/80 text-[11px]">
-                    <span>Đơn giá 1 Manday chuẩn:</span>
+                    <span>Đơn giá 1 MD dự án (= Credit Y ÷ Limit):</span>
                     <strong>{formatMoney(effectiveRate)} / MD</strong>
                   </div>
                 </div>
@@ -1914,20 +1929,35 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                         <strong>{allowedCreateMaxMandays} MD</strong>
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => applyFinancialRecalc(scopeRows)}
-                      className="h-7 text-[11px] bg-white"
-                    >
-                      Chia lại Limit theo tiền
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleRecalcMandayRateByLimit}
+                        title="Tính lại Đơn giá 1 MD = Credit Y ÷ Tổng Limit hiện tại (giữ nguyên Limit từng Mốc)"
+                        className="h-7 text-[11px] bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                      >
+                        Chia lại Đơn giá theo Limit
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => applyFinancialRecalc(scopeRows)}
+                        title="Giữ Đơn giá 1 MD hiện tại và tự chia lại Limit từng Mốc theo tỷ trọng Phân bổ tiền"
+                        className="h-7 text-[11px] bg-white"
+                      >
+                        Chia lại Limit theo tiền
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5">
                     <div className="space-y-1">
-                      <Label className="text-[11px]">Đơn giá 1 MD (VNĐ)</Label>
+                      <Label className="text-[11px]">
+                        Đơn giá 1 MD (VNĐ • Động theo Credit Y / Limit)
+                      </Label>
                       {hidePrice ? (
                         <button
                           type="button"
@@ -1964,7 +1994,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                             Math.max(0, Number(e.target.value) || 0)
                           )
                           setRiskReservePercent(val)
-                          applyFinancialRecalc(scopeRows, { riskReservePercent: val })
+                          syncRateFromCreditAndRows(scopeRows, { riskReservePercent: val })
                         }}
                         className="h-7 text-xs tabular-nums bg-white"
                       />
@@ -1988,7 +2018,7 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                           onChange={(e) => {
                             const val = Math.max(0, Number(e.target.value) || 0)
                             setFixedCostAllocation(val)
-                            applyFinancialRecalc(scopeRows, { fixedCostAllocation: val })
+                            syncRateFromCreditAndRows(scopeRows, { fixedCostAllocation: val })
                           }}
                           className="h-7 text-xs tabular-nums bg-white"
                         />
@@ -2013,13 +2043,73 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                           onChange={(e) => {
                             const val = Math.max(0, Number(e.target.value) || 0)
                             setSalesCommissionAmount(val)
-                            applyFinancialRecalc(scopeRows, {
+                            syncRateFromCreditAndRows(scopeRows, {
                               salesCommissionAmount: val,
                             })
                           }}
                           className="h-7 text-xs tabular-nums bg-white"
                         />
                       )}
+                    </div>
+                  </div>
+
+                  {/* Thuế suất VAT cấp Hợp đồng (AM tự chỉnh 0% / 5% / 8% / 10% hoặc số tùy chọn) */}
+                  <div className="rounded-md border border-slate-200 bg-white p-2.5 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Label className="text-[11px] font-semibold text-slate-800">
+                        Thuế suất VAT hợp đồng (%)
+                      </Label>
+                      <div className="flex items-center gap-1">
+                        {[0, 5, 8, 10].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => {
+                              setContractVatRatePercent(pct)
+                              syncRateFromCreditAndRows(scopeRows, {
+                                contractVatRatePercent: pct,
+                              })
+                            }}
+                            className={cn(
+                              "rounded px-2 py-0.5 text-[11px] font-semibold border transition-colors",
+                              contractVatRatePercent === pct
+                                ? "bg-slate-900 text-white border-slate-900"
+                                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                            )}
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                        <div className="relative w-16 ml-1">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            step={0.5}
+                            value={contractVatRatePercent}
+                            onChange={(e) => {
+                              const val = Math.min(
+                                100,
+                                Math.max(0, Number(e.target.value) || 0)
+                              )
+                              setContractVatRatePercent(val)
+                              syncRateFromCreditAndRows(scopeRows, {
+                                contractVatRatePercent: val,
+                              })
+                            }}
+                            className="h-6 text-[11px] pr-5 text-right tabular-nums"
+                          />
+                          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
+                            %
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-slate-500 flex items-center justify-between">
+                      <span>Tiền thuế VAT ({contractVatRatePercent}%):</span>
+                      <strong className="text-slate-800 tabular-nums">
+                        {formatMoney(createTaxBreakdown.totalVatTax)}
+                      </strong>
                     </div>
                   </div>
 
@@ -2045,33 +2135,12 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                 </div>
               )}
 
-              {roleView !== "PM" && !isCreateMode && activeContract && (
-                <div className="space-y-2 pt-1">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">
-                      Điều chỉnh Mốc ép Target tổng giao PM:
-                    </span>
-                    <span className="font-semibold text-primary">
-                      {amTargetMandays} MD / Limit {maxMandays} MD
-                    </span>
-                  </div>
-                  <Slider
-                    min={Math.max(10, Math.round(maxMandays * 0.5))}
-                    max={maxMandays}
-                    step={1}
-                    value={[activeContract.amTargetMandays]}
-                    onValueChange={(v) =>
-                      updateTargetMandays(activeContract.id, v[0] ?? amTargetMandays)
-                    }
-                  />
-                </div>
-              )}
             </CardContent>
           </Card>
 
-          {/* 4. ĐỢT THANH TOÁN (PAYMENT TRANCHES) - Chia theo % dòng tiền & có liên kết độc lập với Mốc bàn giao */}
-          <Card className="shadow-none border bg-card">
-            <CardHeader className="pb-3 border-b">
+          {/* Ô 4 (Hàng 2 - Phải): ĐỢT THANH TOÁN (PAYMENT TRANCHES) - Chia theo % dòng tiền & có liên kết độc lập với Mốc bàn giao */}
+          <Card className="shadow-none border bg-card lg:h-[460px] min-w-0 flex flex-col overflow-hidden lg:order-4">
+            <CardHeader className="py-3 px-4 border-b shrink-0">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <CardTitle className="text-sm font-semibold">
@@ -2111,8 +2180,8 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
               </div>
             </CardHeader>
 
-            <CardContent className="p-5 space-y-3">
-              <div className="flex items-center justify-between rounded-md bg-slate-50 border px-3 py-2 text-xs">
+            <CardContent className="p-4 space-y-2.5 flex-1 min-h-0 overflow-y-auto">
+              <div className="flex items-center justify-between rounded-md bg-slate-50 border px-3 py-1.5 text-xs">
                 <span className="text-muted-foreground">
                   Tổng tỉ lệ dòng tiền các đợt:
                 </span>
@@ -2129,11 +2198,11 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
               </div>
 
               {isCreateMode ? (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {installments.map((inst, idx) => (
                     <div
                       key={inst.id}
-                      className="rounded-md border p-3 space-y-2.5 text-xs bg-background"
+                      className="rounded-md border p-2.5 space-y-2 text-xs bg-background"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <Input
@@ -2184,37 +2253,55 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 gap-2.5">
                         <div>
-                          <span className="text-[11px] text-muted-foreground block mb-1">
-                            Liên kết với Mốc bàn giao kỹ thuật:
+                          <span className="text-[11px] text-muted-foreground block mb-1.5">
+                            Liên kết Mốc bàn giao (hỗ trợ chọn gộp N-1 Mốc để kích hoạt Đợt này):
                           </span>
-                          <Select
-                            value={inst.linkedMilestoneId}
-                            onValueChange={(val) => {
-                              const ms = scopeRows.find((s) => s.id === val)
-                              const next = [...installments]
-                              next[idx] = {
-                                ...inst,
-                                linkedMilestoneId: val,
-                                triggerMilestoneName: ms
-                                  ? `Hoàn thành ${ms.code}: ${ms.title}`
-                                  : inst.triggerMilestoneName,
-                              }
-                              setInstallments(next)
-                            }}
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="Chọn Mốc liên kết..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {scopeRows.map((s) => (
-                                <SelectItem key={s.id} value={s.id}>
-                                  {s.code} — {s.title}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="flex flex-wrap gap-1.5">
+                            {scopeRows.map((s) => {
+                              const selectedIds =
+                                inst.linkedMilestoneIds.length > 0
+                                  ? inst.linkedMilestoneIds
+                                  : inst.linkedMilestoneId
+                                    ? [inst.linkedMilestoneId]
+                                    : []
+                              const isChecked = selectedIds.includes(s.id)
+                              return (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => {
+                                    const nextIds = isChecked
+                                      ? selectedIds.filter((id) => id !== s.id)
+                                      : [...selectedIds, s.id]
+                                    const linkedNames = scopeRows
+                                      .filter((r) => nextIds.includes(r.id))
+                                      .map((r) => r.code)
+                                      .join(" + ")
+                                    const next = [...installments]
+                                    next[idx] = {
+                                      ...inst,
+                                      linkedMilestoneIds: nextIds,
+                                      linkedMilestoneId: nextIds[0] || "",
+                                      triggerMilestoneName: linkedNames
+                                        ? `Hoàn thành ${linkedNames}`
+                                        : inst.triggerMilestoneName,
+                                    }
+                                    setInstallments(next)
+                                  }}
+                                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+                                    isChecked
+                                      ? "border-primary bg-primary/10 text-primary"
+                                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                                  }`}
+                                >
+                                  {isChecked && <IconCheck className="size-3" />}
+                                  <span>{s.code}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
                         </div>
                         <div>
                           <span className="text-[11px] text-muted-foreground block mb-1">
@@ -2304,46 +2391,6 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
                             </div>
                           </div>
                         </div>
-
-                        {isEditingSchedule && roleView !== "PM" && activeContract && (
-                          <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                            <Select
-                              value={inst.linkedMilestoneId || ""}
-                              onValueChange={(val) => {
-                                const ms = activeContract.scopeItems.find(
-                                  (s) => s.id === val
-                                )
-                                updateInstallment(activeContract.id, inst.id, {
-                                  linkedMilestoneId: val,
-                                  triggerMilestoneName: ms
-                                    ? `Hoàn thành ${ms.code}`
-                                    : inst.triggerMilestoneName,
-                                })
-                              }}
-                            >
-                              <SelectTrigger className="h-7 text-[11px] bg-white">
-                                <SelectValue placeholder="Chọn Mốc bàn giao liên kết" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {activeContract.scopeItems.map((s) => (
-                                  <SelectItem key={s.id} value={s.id}>
-                                    {s.code} — {s.title}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              type="date"
-                              value={inst.dueDate}
-                              onChange={(e) =>
-                                updateInstallment(activeContract.id, inst.id, {
-                                  dueDate: e.target.value,
-                                })
-                              }
-                              className="h-7 text-[11px] bg-white"
-                            />
-                          </div>
-                        )}
                       </div>
                     )
                   })}
@@ -2351,7 +2398,6 @@ export function PreProjectSetupView({ mode = "detail" }: PreProjectSetupViewProp
               )}
             </CardContent>
           </Card>
-        </div>
       </div>
 
       {/* Modal Thêm Khách Hàng */}

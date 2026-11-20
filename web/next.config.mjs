@@ -6,6 +6,19 @@ const nextConfig = {
     appIsrStatus: false,
     buildActivity: false,
   },
+  experimental: {
+    optimizePackageImports: [
+      '@tabler/icons-react',
+      'recharts',
+      'date-fns',
+      'radix-ui',
+    ],
+    staleTimes: {
+      dynamic: 60,
+      static: 300,
+    },
+    proxyClientMaxBodySize: '20mb',
+  },
   async rewrites() {
     const internalApiUrl = process.env.INTERNAL_API_URL || 'http://localhost:8081'
     return [

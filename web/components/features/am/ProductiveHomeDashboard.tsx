@@ -11,7 +11,12 @@ import {
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
-import { useAmPrototype } from "@/components/providers/am-prototype-provider"
+import { useAuth } from "@/components/providers/auth-provider"
+import { useWorkspaceUi } from "@/components/providers/workspace-ui-provider"
+import {
+  useWorkspaceContracts,
+  useWorkspaceRole,
+} from "@/lib/hooks/use-workspace-data"
 import {
   calculateContractMetrics,
   ContractProject,
@@ -135,15 +140,21 @@ export function PersonAvatar({ name }: { name: string }) {
   )
 }
 
+const REAL_MANUAL_TASKS_KEY = "erp_am_real_manual_tasks_v1"
+
 export function ProductiveHomeDashboard() {
+  const { user } = useAuth()
+  const { contracts, isLoading: isContractsLoading } =
+    useWorkspaceContracts({ includeDetails: true })
+  const { isPmRole } = useWorkspaceRole()
+  const roleView = isPmRole ? "PM" : "AM"
+
   const {
-    contracts,
-    roleView,
     formatMoney,
     formatCompactMoney,
     openContractDetail,
     setActiveScreen,
-  } = useAmPrototype()
+  } = useWorkspaceUi()
 
   // Chế độ lọc ở trang Tổng quan: Mặc định chỉ hiện các Dự án & Mốc bàn giao đang chạy
   const [onlyRunningInHome, setOnlyRunningInHome] = React.useState<boolean>(true)
@@ -160,7 +171,22 @@ export function ProductiveHomeDashboard() {
     return init
   })
 
-  // Danh sách việc nhắc riêng do AM tự thêm (kết hợp cùng việc hệ thống tự quét)
+  // Khi danh sách hợp đồng thay đổi (từ PostgreSQL), tự mở các dự án đang chạy
+  React.useEffect(() => {
+    setExpandedContracts((prev) => {
+      const next = { ...prev }
+      let changed = false
+      contracts.forEach((c) => {
+        if (next[c.id] === undefined) {
+          next[c.id] = c.phase === "IN_PROJECT"
+          changed = true
+        }
+      })
+      return changed ? next : prev
+    })
+  }, [contracts])
+
+  // Danh sách việc nhắc riêng do AM tự thêm (lưu cá nhân trên trình duyệt)
   const [manualTasks, setManualTasks] = React.useState<
     Array<{
       id: string
@@ -169,26 +195,48 @@ export function ProductiveHomeDashboard() {
       assignee: string
       done: boolean
     }>
-  >([
-    {
-      id: "manual-1",
-      contractId: "c-002",
-      label: "Gửi dự thảo Phụ lục tích hợp VietQR qua Zalo cho chị Lan duyệt",
-      assignee: "Thảo (AM)",
-      done: false,
-    },
-    {
-      id: "manual-2",
-      contractId: "c-003",
-      label: "Hẹn lịch họp đối soát tiến độ MỐC-03 với anh Quân lúc 15h00",
-      assignee: "Thảo (AM)",
-      done: false,
-    },
-  ])
+  >([])
+
+  React.useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(REAL_MANUAL_TASKS_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          setManualTasks(parsed)
+          return
+        }
+      }
+    } catch {
+      // Ignore storage error
+    }
+    setManualTasks([])
+  }, [])
+
+  React.useEffect(() => {
+    try {
+      window.localStorage.setItem(REAL_MANUAL_TASKS_KEY, JSON.stringify(manualTasks))
+    } catch {
+      // Ignore storage error
+    }
+  }, [manualTasks])
+
   const [isAddingTask, setIsAddingTask] = React.useState(false)
-  const [newTaskContractId, setNewTaskContractId] = React.useState<string>("c-001")
+  const [newTaskContractId, setNewTaskContractId] = React.useState<string>(
+    contracts[0]?.id || "GENERAL"
+  )
   const [newTaskLabel, setNewTaskLabel] = React.useState("")
-  const [newTaskAssignee, setNewTaskAssignee] = React.useState("Thảo (AM)")
+  const [newTaskAssignee, setNewTaskAssignee] = React.useState(
+    user?.full_name || "AM"
+  )
+
+  React.useEffect(() => {
+    setNewTaskContractId((prev) => {
+      if (prev === "GENERAL") return prev
+      if (contracts.some((c) => c.id === prev)) return prev
+      return contracts[0]?.id || "GENERAL"
+    })
+  }, [contracts])
 
   const handleAddManualTask = () => {
     if (!newTaskLabel.trim()) {
@@ -414,7 +462,7 @@ export function ProductiveHomeDashboard() {
                 onClick={() => setActiveScreen("billing-vat")}
                 className="font-semibold text-primary hover:underline"
               >
-                Mở sổ ĐNTT & VAT →
+                Mở sổ Đòi tiền & VAT →
               </button>
             </div>
           </div>

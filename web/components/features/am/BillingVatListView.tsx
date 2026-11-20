@@ -9,7 +9,19 @@ import {
   IconSearch,
   IconUpload,
 } from "@tabler/icons-react"
+import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import {
+  usePatchApiV1InstallmentsIdPay,
+  usePatchApiV1InstallmentsIdVat,
+} from "@/lib/api/generated/installments/installments"
+import { usePostApiV1FilesUpload } from "@/lib/api/generated/files/files"
+import { usePostApiV1ScopeItemsIdDisburseBonus } from "@/lib/api/generated/scope-items/scope-items"
+import { isUuidString } from "@/lib/api/contract-mapper"
+import {
+  useWorkspaceContracts,
+  useWorkspaceRole,
+} from "@/lib/hooks/use-workspace-data"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -29,7 +41,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useAmPrototype } from "@/components/providers/am-prototype-provider"
+import { useWorkspaceUi } from "@/components/providers/workspace-ui-provider"
+import { useWorkspaceCustomerOptions } from "@/lib/hooks/use-workspace-data"
 import { PersonAvatar } from "@/components/features/am/ProductiveHomeDashboard"
 import {
   calculateContractMetrics,
@@ -54,15 +67,33 @@ interface FlattenedBonusRow {
 }
 
 export function BillingVatListView() {
-  const {
-    contracts,
-    customers,
-    roleView,
-    formatMoney,
-    openContractDetail,
-    updateInstallment,
-    addInstallment,
-  } = useAmPrototype()
+  const queryClient = useQueryClient()
+  const uploadVatFileMutation = usePostApiV1FilesUpload()
+  const disburseBonusMutation = usePostApiV1ScopeItemsIdDisburseBonus()
+  const payInstallmentMutation = usePatchApiV1InstallmentsIdPay()
+  const updateVatMutation = usePatchApiV1InstallmentsIdVat()
+
+  const { contracts, canQueryRealApi } = useWorkspaceContracts({
+    includeDetails: true,
+  })
+  const { customerOptions: customers } = useWorkspaceCustomerOptions()
+  const { isPmRole, canConfirmAccountantOps } = useWorkspaceRole()
+  const roleView = isPmRole ? "PM" : "AM"
+
+  const { formatMoney, openContractDetail } = useWorkspaceUi()
+
+  const invalidateBillingQueries = React.useCallback(
+    (contractId: string) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/contracts"] })
+      queryClient.invalidateQueries({ queryKey: [`/api/v1/contracts/${contractId}`] })
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/installments/queue"] })
+    },
+    [queryClient]
+  )
+
+  const [disbursingRow, setDisbursingRow] =
+    React.useState<FlattenedBonusRow | null>(null)
+  const [disburseNoteDraft, setDisburseNoteDraft] = React.useState("")
 
   const [searchQuery, setSearchQuery] = React.useState("")
   const [projectFilter, setProjectFilter] = React.useState<string>("ALL")
@@ -224,6 +255,7 @@ export function BillingVatListView() {
     let totalRiskReserveMd = 0
     let totalRiskReserveVnd = 0
     let totalUnlockedBonusVnd = 0
+    let totalDisbursedBonusVnd = 0
     let totalPendingBonusVnd = 0
 
     bonusRows.forEach(({ four }) => {
@@ -231,7 +263,9 @@ export function BillingVatListView() {
       totalRealMd += four.realMandays
       totalRiskReserveMd += four.riskReserve50Md
       totalRiskReserveVnd += four.riskBuffer50Vnd
-      if (four.bonusUnlockStatus === "UNLOCKED") {
+      if (four.bonusUnlockStatus === "DISBURSED") {
+        totalDisbursedBonusVnd += four.teamBonus50Vnd
+      } else if (four.bonusUnlockStatus === "UNLOCKED") {
         totalUnlockedBonusVnd += four.teamBonus50Vnd
       } else if (four.bonusUnlockStatus === "PENDING_PAYMENT") {
         totalPendingBonusVnd += four.teamBonus50Vnd
@@ -244,9 +278,44 @@ export function BillingVatListView() {
       totalRiskReserveMd: Number(totalRiskReserveMd.toFixed(1)),
       totalRiskReserveVnd,
       totalUnlockedBonusVnd,
+      totalDisbursedBonusVnd,
       totalPendingBonusVnd,
     }
   }, [bonusRows])
+
+  const handleConfirmDisburseBonus = async () => {
+    if (!disbursingRow) return
+    const { contract, scopeItem } = disbursingRow
+    if (!canQueryRealApi || !isUuidString(scopeItem.id)) {
+      toast.error("Mã Mốc bàn giao không hợp lệ")
+      return
+    }
+    try {
+      await disburseBonusMutation.mutateAsync({
+        id: scopeItem.id,
+        data: {
+          note:
+            disburseNoteDraft.trim() ||
+            `Đã thực chi thưởng 50% mốc ${scopeItem.code}`,
+        },
+      })
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/contracts"] })
+      queryClient.invalidateQueries({
+        queryKey: [`/api/v1/contracts/${contract.id}`],
+      })
+      toast.success(`Đã xác nhận thực chi thưởng 50% cho ${scopeItem.code}!`)
+      setDisbursingRow(null)
+      setDisburseNoteDraft("")
+    } catch (err) {
+      const axiosErr = err as {
+        response?: { data?: { errors?: Array<{ message?: string }> } }
+      }
+      toast.error(
+        axiosErr?.response?.data?.errors?.[0]?.message ||
+          "Không thể xác nhận thực chi thưởng"
+      )
+    }
+  }
 
   const handleOpenVatModal = (row: FlattenedInstallmentRow) => {
     const num = row.installment.vatInvoiceNumber || "0001688"
@@ -257,55 +326,75 @@ export function BillingVatListView() {
     )
   }
 
-  const handleConfirmVatModal = () => {
+  const handleMarkPaid = async (row: FlattenedInstallmentRow) => {
+    const { contract, installment } = row
+    if (!canQueryRealApi || !isUuidString(installment.id)) {
+      toast.error("Mã Đợt thanh toán không hợp lệ")
+      return
+    }
+    try {
+      const res = await payInstallmentMutation.mutateAsync({ id: installment.id })
+      invalidateBillingQueries(contract.id)
+      const autoKickedOff = Boolean(
+        (res as { data?: { auto_kicked_off?: boolean } } | undefined)?.data
+          ?.auto_kicked_off
+      )
+      if (autoKickedOff) {
+        toast.success(
+          `Đã xác nhận thu tiền "${installment.name}" và tự động chuyển dự án sang Đang triển khai (IN_PROJECT)!`
+        )
+      } else {
+        toast.success(`Đã xác nhận thu tiền "${installment.name}"!`)
+      }
+    } catch (err) {
+      const axiosErr = err as {
+        response?: { data?: { errors?: Array<{ message?: string }> } }
+      }
+      toast.error(
+        axiosErr?.response?.data?.errors?.[0]?.message ||
+          "Không thể xác nhận Đã thu tiền"
+      )
+    }
+  }
+
+  const handleConfirmVatModal = async () => {
     if (!issuingRow) return
     if (!vatNumberDraft.trim() || !vatUrlDraft.trim()) {
       toast.error("Bắt buộc nhập Số hóa đơn VAT và File PDF!")
       return
     }
-    updateInstallment(issuingRow.contract.id, issuingRow.installment.id, {
-      vatInvoiceStatus: "ISSUED",
-      vatInvoiceNumber: vatNumberDraft.trim(),
-      vatInvoiceFileUrl: vatUrlDraft.trim(),
-    })
-    setIssuingRow(null)
+    const { contract, installment } = issuingRow
+    if (!canQueryRealApi || !isUuidString(installment.id)) {
+      toast.error("Mã Đợt thanh toán không hợp lệ")
+      return
+    }
+    try {
+      await updateVatMutation.mutateAsync({
+        id: installment.id,
+        data: {
+          vat_invoice_status: "ISSUED",
+          vat_invoice_number: vatNumberDraft.trim(),
+          vat_invoice_file_url: vatUrlDraft.trim(),
+        },
+      })
+      invalidateBillingQueries(contract.id)
+      toast.success(`Đã lưu Hóa đơn VAT #${vatNumberDraft.trim()}!`)
+      setIssuingRow(null)
+    } catch (err) {
+      const axiosErr = err as {
+        response?: { data?: { errors?: Array<{ message?: string }> } }
+      }
+      toast.error(
+        axiosErr?.response?.data?.errors?.[0]?.message ||
+          "Không thể cập nhật Hóa đơn VAT"
+      )
+    }
   }
 
   const handleCreateInstallment = () => {
-    const targetContract = contracts.find((c) => c.id === trancheContractId)
-    if (!targetContract) return
-    if (!trancheName.trim()) {
-      toast.error("Vui lòng nhập tên Đợt thanh toán")
-      return
-    }
-    const amt = Math.max(0, Number(trancheAmount) || 0)
-    const pct = Math.max(1, Number(tranchePct) || 30)
-    const vatAmt = Math.round((amt / 1.1) * 0.1)
-
-    const linkedScopes = targetContract.scopeItems.filter((s) =>
-      selectedMilestoneIds.includes(s.id)
+    toast.info(
+      "Các đợt thanh toán phát sinh được tự động tạo khi khởi tạo Hợp đồng hoặc duyệt Phụ lục Upsell (CR)."
     )
-    const triggerLabel =
-      linkedScopes.length > 0
-        ? `Hoàn thành nghiệm thu ${linkedScopes
-            .map((s) => s.code || s.title)
-            .join(" + ")}`
-        : "Theo tiến độ hợp đồng"
-
-    addInstallment(targetContract.id, {
-      name: trancheName.trim(),
-      percentage: pct,
-      amount: amt,
-      vatAmount: vatAmt,
-      nonVatAmount: amt - vatAmt,
-      dueDate: trancheDueDate,
-      linkedMilestoneId: selectedMilestoneIds[0],
-      linkedMilestoneIds:
-        selectedMilestoneIds.length > 0 ? selectedMilestoneIds : undefined,
-      triggerMilestoneName: triggerLabel,
-      paymentStatus: "PENDING",
-      vatInvoiceStatus: "NOT_YET",
-    })
     setAddTrancheOpen(false)
     setTrancheName("")
     setSelectedMilestoneIds([])
@@ -363,7 +452,7 @@ export function BillingVatListView() {
             <SelectContent>
               <SelectItem value="ALL">Mọi trạng thái thu</SelectItem>
               <SelectItem value="PAID">Đã thu tiền</SelectItem>
-              <SelectItem value="INVOICED">Đã gửi ĐNTT</SelectItem>
+              <SelectItem value="INVOICED">Đòi tiền</SelectItem>
               <SelectItem value="OVERDUE">Quá hạn</SelectItem>
               <SelectItem value="PENDING">Chờ nghiệm thu Mốc</SelectItem>
             </SelectContent>
@@ -422,10 +511,10 @@ export function BillingVatListView() {
           )}
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="max-h-[404px] overflow-x-auto overflow-y-auto">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 text-[13px] font-medium text-slate-500">
+            <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_rgb(226,232,240)]">
+              <tr className="text-[13px] font-medium text-slate-500">
                 <th className="py-3 pl-5 pr-3 font-medium">Trạng thái thu</th>
                 <th className="py-3 px-3 font-medium">Dự án</th>
                 <th className="py-3 px-3 font-medium">Đợt thanh toán</th>
@@ -482,7 +571,9 @@ export function BillingVatListView() {
                         </span>
                       ) : isReadyToCollect ? (
                         <span className="inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200/70">
-                          Mốc xong • Đòi tiền
+                          {installment.paymentStatus === "INVOICED"
+                            ? "Đòi tiền"
+                            : "Mốc xong • Đòi tiền"}
                         </span>
                       ) : (
                         <span className="inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-600">
@@ -562,14 +653,16 @@ export function BillingVatListView() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() =>
-                              updateInstallment(contract.id, installment.id, {
-                                paymentStatus: "PAID",
-                                paidDate: new Date()
-                                  .toISOString()
-                                  .slice(0, 10),
-                              })
+                            disabled={
+                              !canConfirmAccountantOps ||
+                              payInstallmentMutation.isPending
                             }
+                            title={
+                              canConfirmAccountantOps
+                                ? "Xác nhận tiền đã về (PAID)"
+                                : "Chỉ Kế toán / AM / BOD / Admin được xác nhận tiền về"
+                            }
+                            onClick={() => handleMarkPaid(row)}
                             className="h-8 px-2.5 text-xs font-medium border-slate-300 bg-white text-slate-900 hover:bg-slate-50"
                           >
                             ✓ Thu tiền
@@ -578,6 +671,12 @@ export function BillingVatListView() {
                         <Button
                           size="sm"
                           variant="outline"
+                          disabled={!canConfirmAccountantOps}
+                          title={
+                            canConfirmAccountantOps
+                              ? "Xuất / Sửa hóa đơn VAT"
+                              : "Chỉ Kế toán / AM / BOD / Admin được xuất VAT"
+                          }
                           onClick={() => handleOpenVatModal(row)}
                           className="h-8 px-2.5 text-xs border-slate-200 text-slate-700"
                         >
@@ -600,27 +699,42 @@ export function BillingVatListView() {
             </tbody>
           </table>
         </div>
+        {filteredInstallmentRows.length > 6 && (
+          <div className="px-5 py-2 border-t border-slate-100 bg-slate-50/70 text-xs text-slate-500">
+            Hiển thị 6 / {filteredInstallmentRows.length} đợt thanh toán — cuộn xuống trong bảng để xem thêm
+          </div>
+        )}
       </div>
 
       {/* =================================================================== */}
       {/* TABLE 2: QUYẾT TOÁN QUỸ THƯỞNG 50% & DỰ PHÒNG RỦI RO 50%            */}
       {/* =================================================================== */}
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+        <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-slate-900">
               2. Bảng Quyết Toán Quỹ Thưởng 50% & Quỹ Dự Phòng Rủi Ro 50% Theo Mốc (Cách B)
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Mỗi Mốc hoàn thành có dôi dư (Trần tối đa &gt; Thực tế tiêu): 50% giữ lại vào Quỹ dự phòng rủi ro dự án để bù trừ nếu Mốc sau lố trần; 50% thưởng đội dự án và mở khóa ngay khi khách thanh toán Đợt tương ứng.
+              Mỗi Mốc hoàn thành có dôi dư: 50% giữ lại vào Quỹ dự phòng rủi ro; 50% thưởng mở khóa khi khách thanh toán Đợt tương ứng và Kế toán bấm xác nhận <strong>Đã thực chi</strong>.
             </p>
           </div>
+          {roleView !== "PM" && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 font-medium text-amber-900">
+                Chờ thực chi: <strong>{formatMoney(bonusSummary.totalUnlockedBonusVnd)}</strong>
+              </span>
+              <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 font-medium text-emerald-800">
+                Đã thực chi 50%: <strong>{formatMoney(bonusSummary.totalDisbursedBonusVnd)}</strong>
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="max-h-[404px] overflow-x-auto overflow-y-auto">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 text-[13px] font-medium text-slate-500">
+            <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_rgb(226,232,240)]">
+              <tr className="text-[13px] font-medium text-slate-500">
                 <th className="py-3 pl-5 pr-3 font-medium">Dự án</th>
                 <th className="py-3 px-3 font-medium">Mã</th>
                 <th className="py-3 px-3 font-medium">Tên Mốc bàn giao</th>
@@ -688,7 +802,7 @@ export function BillingVatListView() {
                     <td className="py-3.5 px-3 text-right tabular-nums text-xs">
                       {four.supportMandays > 0 ? (
                         <span className="rounded bg-blue-50 px-2 py-0.5 font-medium text-blue-700 border border-blue-200/70">
-                          {four.supportMandays} ngày (Tách riêng)
+                          {four.supportMandays} ngày
                         </span>
                       ) : (
                         <span className="text-slate-400">0 ngày</span>
@@ -724,11 +838,44 @@ export function BillingVatListView() {
                         </td>
                       </>
                     )}
-                    <td className="py-3.5 pl-3 pr-5 text-right">
-                      {four.bonusUnlockStatus === "UNLOCKED" ? (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200/70">
-                          ✓ Đã mở khóa • Chi ngay
+                    <td
+                      className="py-3.5 pl-3 pr-5 text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {four.bonusUnlockStatus === "DISBURSED" ? (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white">
+                          <IconCheck className="size-3.5" />
+                          Đã thực chi 50%
+                          {scopeItem.bonusDisbursedAt
+                            ? ` (${scopeItem.bonusDisbursedAt})`
+                            : ""}
                         </span>
+                      ) : four.bonusUnlockStatus === "CLAWBACK_PENDING" ? (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 border border-amber-300">
+                          ⚠ Cần đối trừ (Đã Reopen)
+                        </span>
+                      ) : four.bonusUnlockStatus === "UNLOCKED" ? (
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200/70">
+                            Đủ ĐK chi
+                          </span>
+                          <Button
+                            size="sm"
+                            disabled={!canConfirmAccountantOps}
+                            title={
+                              canConfirmAccountantOps
+                                ? "Kế toán/AM/BOD xác nhận đã chuyển khoản thực chi thưởng 50%"
+                                : "Chỉ Kế toán / AM / BOD / Admin được xác nhận thực chi"
+                            }
+                            onClick={() => {
+                              setDisbursingRow({ contract, scopeItem, four })
+                              setDisburseNoteDraft("")
+                            }}
+                            className="h-7 px-2.5 text-xs bg-emerald-700 hover:bg-emerald-800 text-white"
+                          >
+                            ✓ Xác nhận Đã chi 50%
+                          </Button>
+                        </div>
                       ) : four.bonusUnlockStatus === "PENDING_PAYMENT" ? (
                         <span className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
                           Chờ khách thanh toán
@@ -749,7 +896,76 @@ export function BillingVatListView() {
             </tbody>
           </table>
         </div>
+        {bonusRows.length > 6 && (
+          <div className="px-5 py-2 border-t border-slate-100 bg-slate-50/70 text-xs text-slate-500">
+            Hiển thị 6 / {bonusRows.length} mốc quyết toán — cuộn xuống trong bảng để xem thêm
+          </div>
+        )}
       </div>
+
+      {/* =================================================================== */}
+      {/* DIALOG XÁC NHẬN ĐÃ THỰC CHI THƯỞNG 50%                              */}
+      {/* =================================================================== */}
+      <Dialog
+        open={!!disbursingRow}
+        onOpenChange={(o) => !o && setDisbursingRow(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              Xác Nhận Đã Thực Chi Thưởng 50%
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Ghi nhận Kế toán / BOD đã chuyển khoản thực tế phần thưởng 50% của Mốc bàn giao. Nếu Mốc bị Reopen sau khi chi, hệ thống sẽ tự động đánh dấu cần đối trừ.
+            </DialogDescription>
+          </DialogHeader>
+          {disbursingRow && (
+            <div className="space-y-3 py-2 text-xs">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 space-y-1">
+                <div className="font-semibold text-slate-900">
+                  {disbursingRow.contract.contractCode} —{" "}
+                  {disbursingRow.scopeItem.code}: {disbursingRow.scopeItem.title}
+                </div>
+                <div className="text-slate-700">
+                  Dôi dư: <strong>+{disbursingRow.four.surplusMandays} MD</strong> • Mức thực chi 50%:{" "}
+                  <strong className="text-emerald-800">
+                    +{disbursingRow.four.bonusSplit50Md} MD (
+                    {formatMoney(disbursingRow.four.teamBonus50Vnd)})
+                  </strong>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Mã chứng từ / Ghi chú giải ngân</Label>
+                <Input
+                  value={disburseNoteDraft}
+                  onChange={(e) => setDisburseNoteDraft(e.target.value)}
+                  placeholder="VD: UNC Vietcombank ngày hôm nay..."
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDisbursingRow(null)}
+            >
+              Hủy
+            </Button>
+            <Button
+              size="sm"
+              disabled={disburseBonusMutation.isPending}
+              onClick={handleConfirmDisburseBonus}
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+            >
+              {disburseBonusMutation.isPending
+                ? "Đang lưu..."
+                : "✓ Xác nhận Đã thực chi 50%"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* =================================================================== */}
       {/* DIALOG 1: XUẤT HÓA ĐƠN VAT                                          */}
@@ -796,9 +1012,26 @@ export function BillingVatListView() {
                   ref={vatFileInputRef}
                   type="file"
                   accept=".pdf,.png,.jpg"
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const f = e.target.files?.[0]
-                    if (f) setVatUrlDraft(f.name)
+                    if (!f) return
+                    if (canQueryRealApi && issuingRow) {
+                      try {
+                        const res = await uploadVatFileMutation.mutateAsync({
+                          data: {
+                            file: f,
+                            contract_id: issuingRow.contract.id,
+                            category: "INVOICE",
+                          },
+                        })
+                        setVatUrlDraft(res?.data?.url || f.name)
+                        toast.success(`Đã tải file VAT "${f.name}" lên máy chủ`)
+                      } catch {
+                        toast.error(`Không thể tải file VAT "${f.name}" lên máy chủ`)
+                      }
+                    } else {
+                      setVatUrlDraft(f.name)
+                    }
                   }}
                   className="hidden"
                 />
@@ -862,11 +1095,7 @@ export function BillingVatListView() {
               const briefText = [
                 `[YÊU CẦU XUẤT HÓA ĐƠN VAT - ${briefRow.contract.contractCode}]`,
                 `- Đơn vị mua hàng: ${briefRow.contract.customerName}`,
-                `- Mã số thuế: ${cust?.taxCode || "0314558899"}`,
-                `- Địa chỉ: ${cust?.address || "TP. Hồ Chí Minh"}`,
-                `- Email nhận HĐĐT: ${
-                  cust?.accountingContact.email || "accounting@client.vn"
-                }`,
+                `- Mã số thuế: ${cust?.taxCode || "Chưa cập nhật MST"}`,
                 `- Nội dung xuất HĐ: Thanh toán ${briefRow.installment.name} (${briefRow.linkedMilestonesLabel}) theo Hợp đồng ${briefRow.contract.contractCode}`,
                 `- Tổng thanh toán: ${briefRow.installment.amount.toLocaleString(
                   "vi-VN"
@@ -893,15 +1122,24 @@ export function BillingVatListView() {
                     <Button
                       size="sm"
                       className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
-                      onClick={() => {
+                      onClick={async () => {
                         navigator.clipboard.writeText(briefText)
-                        updateInstallment(
-                          briefRow.contract.id,
-                          briefRow.installment.id,
-                          {
-                            vatInvoiceStatus: "SENT_TO_ACCOUNTANT",
+                        if (
+                          canQueryRealApi &&
+                          isUuidString(briefRow.installment.id)
+                        ) {
+                          try {
+                            await updateVatMutation.mutateAsync({
+                              id: briefRow.installment.id,
+                              data: {
+                                vat_invoice_status: "SENT_TO_ACCOUNTANT",
+                              },
+                            })
+                            invalidateBillingQueries(briefRow.contract.id)
+                          } catch {
+                            // Cho phép copy thành công ngay cả nếu đã gửi trước đó
                           }
-                        )
+                        }
                         toast.success(
                           "Đã copy Phiếu giao việc Kế toán & đánh dấu Đã gửi KT!"
                         )

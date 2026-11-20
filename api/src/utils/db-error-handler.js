@@ -111,4 +111,5 @@ function handleDatabaseError(error, customConstraintMap = {}, fallbackMessage = 
     return new ApiError(HttpStatus.INTERNAL_SERVER_ERROR, fallbackMessage);
 }
 
+handleDatabaseError.handleDatabaseError = handleDatabaseError;
 module.exports = handleDatabaseError;

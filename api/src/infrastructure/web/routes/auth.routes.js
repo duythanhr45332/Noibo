@@ -2,6 +2,11 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/auth.controller');
 const authMiddleware = require('../middlewares/auth.middleware');
+const {
+  loginRateLimiter,
+  refreshRateLimiter,
+  changePasswordRateLimiter,
+} = require('../middlewares/rate-limit.middleware');
 
 /**
  * @swagger
@@ -33,7 +38,20 @@ const authMiddleware = require('../middlewares/auth.middleware');
  *       401:
  *         description: Sai tên đăng nhập hoặc mật khẩu
  */
-router.post('/login', authController.login);
+router.post('/login', ...loginRateLimiter, authController.login);
+
+/**
+ * @swagger
+ * /api/v1/auth/session:
+ *   get:
+ *     summary: Kiểm tra trạng thái phiên đăng nhập hiện tại (tự làm mới nếu có refreshToken)
+ *     tags: [Authentication]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Trạng thái phiên đăng nhập và thông tin user nếu đã xác thực
+ */
+router.get('/session', authController.session);
 
 /**
  * @swagger
@@ -70,7 +88,7 @@ router.get('/me', authMiddleware, authController.getMe);
  *       200:
  *         description: Đăng xuất thành công
  */
-router.post('/logout', authMiddleware, authController.logout);
+router.post('/logout', authController.logout);
 
 /**
  * @swagger
@@ -92,7 +110,7 @@ router.post('/logout', authMiddleware, authController.logout);
  *       200:
  *         description: Trả về access token mới
  */
-router.post('/refresh', authController.refresh);
+router.post('/refresh', refreshRateLimiter, authController.refresh);
 
 /**
  * @swagger
@@ -124,6 +142,11 @@ router.post('/refresh', authController.refresh);
  *             schema:
  *               $ref: '#/components/schemas/ApiResponse'
  */
-router.put('/change-password', authMiddleware, authController.changePassword);
+router.put(
+  '/change-password',
+  authMiddleware,
+  changePasswordRateLimiter,
+  authController.changePassword
+);
 
 module.exports = router;

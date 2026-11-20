@@ -20,10 +20,15 @@ const authMiddleware = async (req, res, next) => {
     if (!token) {
       return res.status(401).json({
         success: false,
-        error: {
-          code: 'UNAUTHORIZED',
-          message: 'Không tìm thấy mã xác thực (Token missing)',
-        },
+        data: null,
+        errors: [
+          {
+            field: 'auth',
+            code: 'UNAUTHORIZED',
+            message: 'Không tìm thấy mã xác thực (Token missing)',
+          },
+        ],
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -36,18 +41,28 @@ const authMiddleware = async (req, res, next) => {
       if (jwtErr.name === 'TokenExpiredError') {
         return res.status(401).json({
           success: false,
-          error: {
-            code: 'TOKEN_EXPIRED',
-            message: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại',
-          },
+          data: null,
+          errors: [
+            {
+              field: 'auth',
+              code: 'TOKEN_EXPIRED',
+              message: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại',
+            },
+          ],
+          timestamp: new Date().toISOString(),
         });
       }
       return res.status(401).json({
         success: false,
-        error: {
-          code: 'INVALID_TOKEN',
-          message: 'Mã xác thực không hợp lệ',
-        },
+        data: null,
+        errors: [
+          {
+            field: 'auth',
+            code: 'INVALID_TOKEN',
+            message: 'Mã xác thực không hợp lệ',
+          },
+        ],
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -62,7 +77,15 @@ const authMiddleware = async (req, res, next) => {
     if (result.rows.length === 0) {
       return res.status(401).json({
         success: false,
-        error: { code: 'USER_NOT_FOUND', message: 'Tài khoản không tồn tại' },
+        data: null,
+        errors: [
+          {
+            field: 'auth',
+            code: 'USER_NOT_FOUND',
+            message: 'Tài khoản không tồn tại',
+          },
+        ],
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -71,10 +94,15 @@ const authMiddleware = async (req, res, next) => {
     if (!user.is_active || user.deleted_at !== null) {
       return res.status(403).json({
         success: false,
-        error: {
-          code: 'ACCOUNT_DISABLED',
-          message: 'Tài khoản của bạn đã bị khóa hoặc vô hiệu hóa',
-        },
+        data: null,
+        errors: [
+          {
+            field: 'auth',
+            code: 'ACCOUNT_DISABLED',
+            message: 'Tài khoản của bạn đã bị khóa hoặc vô hiệu hóa',
+          },
+        ],
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -92,10 +120,15 @@ const authMiddleware = async (req, res, next) => {
     logger.error('Auth Middleware Error:', error);
     return res.status(500).json({
       success: false,
-      error: {
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Lỗi hệ thống khi xác thực quyền truy cập',
-      },
+      data: null,
+      errors: [
+        {
+          field: 'auth',
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Lỗi hệ thống khi xác thực quyền truy cập',
+        },
+      ],
+      timestamp: new Date().toISOString(),
     });
   }
 };

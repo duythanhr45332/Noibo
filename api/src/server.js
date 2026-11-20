@@ -4,12 +4,18 @@ const app = require('./app');
 // Port mặc định 8081 (tách biệt với VPCC chạy ở 8080)
 const PORT = process.env.PORT || 8081;
 
+const {
+  startMaintenanceCron,
+  stopMaintenanceCron,
+} = require('./infrastructure/jobs/maintenance-cron');
+
 const server = app.listen(PORT, () => {
     console.log(`🚀 Hệ thống ERP-AM Backend đang chạy tại http://localhost:${PORT}`);
     console.log(`- Swagger UI: http://localhost:${PORT}/api-docs`);
     console.log(`- API Auth (Đăng nhập): http://localhost:${PORT}/api/v1/auth/login`);
     console.log(`- API Users (Nhân sự): http://localhost:${PORT}/api/v1/users`);
     console.log(`- API Roles (Phân quyền): http://localhost:${PORT}/api/v1/roles`);
+    startMaintenanceCron();
 });
 
 // Graceful Shutdown: Handle Docker/PM2/terminal stop signals
@@ -22,7 +28,8 @@ const gracefulShutdown = async (signal) => {
     isShuttingDown = true;
     console.log(`\n🛑 Nhận tín hiệu ${signal}. Bắt đầu quá trình Graceful Shutdown...`);
 
-    // 1. Đóng toàn bộ các kết nối SSE đang mở
+    // 1. Dừng background cron & đóng kết nối SSE
+    stopMaintenanceCron();
     try {
         const sseManager = require('./infrastructure/services/SseManager');
         sseManager.closeAll();

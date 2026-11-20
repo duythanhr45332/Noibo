@@ -1,25 +1,64 @@
-const HttpStatus = require('../../../utils/http-status');
+const jwt = require('jsonwebtoken');
 const { z } = require('zod');
+const HttpStatus = require('../../../utils/http-status');
 const AuthenticateUser = require('../../../use_cases/AuthenticateUser');
 const GetMeProfile = require('../../../use_cases/GetMeProfile');
 const RefreshAccessToken = require('../../../use_cases/RefreshAccessToken');
 const ChangePassword = require('../../../use_cases/users/ChangePassword');
 const PostgresUserRepository = require('../../database/PostgresUserRepository');
 const PostgresTokenRepository = require('../../database/PostgresTokenRepository');
+const PostgresAuditLogRepository = require('../../database/PostgresAuditLogRepository');
 
 const userRepository = new PostgresUserRepository();
 const tokenRepository = new PostgresTokenRepository();
+const auditLogRepository = new PostgresAuditLogRepository();
 
 const authenticateUserUseCase = new AuthenticateUser(
   userRepository,
-  tokenRepository,
+  tokenRepository
 );
 const getMeProfileUseCase = new GetMeProfile(userRepository);
 const refreshAccessTokenUseCase = new RefreshAccessToken(
   userRepository,
-  tokenRepository,
+  tokenRepository
 );
-const changePasswordUseCase = new ChangePassword({ userRepository });
+const changePasswordUseCase = new ChangePassword({
+  userRepository,
+  auditLogRepository,
+});
+
+const ACCESS_COOKIE_MAX_AGE_MS = 8 * 60 * 60 * 1000;
+const REFRESH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function getCookieSecurityOptions(req) {
+  const isSecureRequest =
+    process.env.COOKIE_SECURE === 'true' ||
+    req.secure ||
+    req.headers['x-forwarded-proto'] === 'https';
+  return {
+    httpOnly: true,
+    secure: isSecureRequest,
+    sameSite: isSecureRequest ? 'strict' : 'lax',
+  };
+}
+
+function setAuthCookies(req, res, { token, refreshToken }) {
+  const base = getCookieSecurityOptions(req);
+  if (token) {
+    res.cookie('token', token, { ...base, maxAge: ACCESS_COOKIE_MAX_AGE_MS });
+  }
+  if (refreshToken) {
+    res.cookie('refreshToken', refreshToken, {
+      ...base,
+      maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+    });
+  }
+}
+
+function clearAuthCookies(res) {
+  res.clearCookie('token');
+  res.clearCookie('refreshToken');
+}
 
 const loginSchema = z.object({
   username: z.string().min(1, 'Vui lòng nhập tên đăng nhập'),
@@ -37,25 +76,7 @@ class AuthController {
       const validatedData = loginSchema.parse(req.body);
       const result = await authenticateUserUseCase.execute(validatedData);
 
-      const isSecureRequest =
-        process.env.COOKIE_SECURE === 'true' ||
-        req.secure ||
-        req.headers['x-forwarded-proto'] === 'https';
-      const cookieSameSite = isSecureRequest ? 'strict' : 'lax';
-
-      res.cookie('token', result.token, {
-        httpOnly: true,
-        secure: isSecureRequest,
-        sameSite: cookieSameSite,
-        maxAge: 30 * 60 * 1000,
-      });
-
-      res.cookie('refreshToken', result.refreshToken, {
-        httpOnly: true,
-        secure: isSecureRequest,
-        sameSite: cookieSameSite,
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-      });
+      setAuthCookies(req, res, result);
 
       return res.status(HttpStatus.OK).json({
         success: true,
@@ -76,6 +97,73 @@ class AuthController {
         });
       }
       next(error);
+    }
+  }
+
+  /**
+   * Kiểm tra phiên đăng nhập an toàn (không trả 401 khi ở chế độ Prototype / chưa đăng nhập)
+   * và tự động xoay vòng refreshToken nếu access token hết hạn.
+   */
+  async session(req, res) {
+    const respondGuest = (shouldClearCookies = false) => {
+      if (shouldClearCookies) clearAuthCookies(res);
+      return res.status(HttpStatus.OK).json({
+        success: true,
+        data: { authenticated: false, user: null },
+        errors: [],
+        timestamp: new Date().toISOString(),
+      });
+    };
+
+    try {
+      const authHeader = req.headers.authorization;
+      const accessToken =
+        authHeader && authHeader.startsWith('Bearer ')
+          ? authHeader.split(' ')[1]
+          : req.cookies?.token || null;
+      const secret =
+        process.env.JWT_SECRET || 'fallback_secret_key_for_development_only';
+
+      if (accessToken) {
+        try {
+          const decoded = jwt.verify(accessToken, secret);
+          const profile = await getMeProfileUseCase.execute(
+            decoded.sub || decoded.user_id
+          );
+          return res.status(HttpStatus.OK).json({
+            success: true,
+            data: { authenticated: true, user: profile },
+            errors: [],
+            timestamp: new Date().toISOString(),
+          });
+        } catch {
+          // Access token hết hạn hoặc không hợp lệ -> thử refreshToken bên dưới
+        }
+      }
+
+      const refreshToken = req.cookies?.refreshToken || null;
+      if (refreshToken) {
+        try {
+          const refreshed = await refreshAccessTokenUseCase.execute(refreshToken);
+          const decodedRefreshed = jwt.verify(refreshed.token, secret);
+          const profile = await getMeProfileUseCase.execute(
+            decodedRefreshed.sub || decodedRefreshed.user_id
+          );
+          setAuthCookies(req, res, refreshed);
+          return res.status(HttpStatus.OK).json({
+            success: true,
+            data: { authenticated: true, user: profile },
+            errors: [],
+            timestamp: new Date().toISOString(),
+          });
+        } catch {
+          return respondGuest(true);
+        }
+      }
+
+      return respondGuest(Boolean(req.cookies?.token));
+    } catch {
+      return respondGuest(false);
     }
   }
 
@@ -112,8 +200,7 @@ class AuthController {
       if (refreshToken) {
         await tokenRepository.revokeToken(refreshToken);
       }
-      res.clearCookie('token');
-      res.clearCookie('refreshToken');
+      clearAuthCookies(res);
 
       return res.status(HttpStatus.OK).json({
         success: true,
@@ -132,39 +219,25 @@ class AuthController {
         (req.body && req.body.refreshToken) ||
         (req.cookies && req.cookies.refreshToken);
       if (!refreshToken) {
-        res.clearCookie('token');
-        res.clearCookie('refreshToken');
+        clearAuthCookies(res);
 
-        return res.status(HttpStatus.BAD_REQUEST).json({
+        return res.status(HttpStatus.UNAUTHORIZED).json({
           success: false,
           data: null,
-          errors: [{ message: 'Thiếu refreshToken' }],
+          errors: [
+            {
+              field: 'auth',
+              code: 'MISSING_REFRESH_TOKEN',
+              message: 'Thiếu refreshToken',
+            },
+          ],
           timestamp: new Date().toISOString(),
         });
       }
 
       try {
         const result = await refreshAccessTokenUseCase.execute(refreshToken);
-
-        const isSecureRequest =
-          process.env.COOKIE_SECURE === 'true' ||
-          req.secure ||
-          req.headers['x-forwarded-proto'] === 'https';
-        const cookieSameSite = isSecureRequest ? 'strict' : 'lax';
-
-        res.cookie('token', result.token, {
-          httpOnly: true,
-          secure: isSecureRequest,
-          sameSite: cookieSameSite,
-          maxAge: 30 * 60 * 1000,
-        });
-
-        res.cookie('refreshToken', result.refreshToken, {
-          httpOnly: true,
-          secure: isSecureRequest,
-          sameSite: cookieSameSite,
-          maxAge: 30 * 24 * 60 * 60 * 1000,
-        });
+        setAuthCookies(req, res, result);
 
         return res.status(HttpStatus.OK).json({
           success: true,
@@ -173,8 +246,7 @@ class AuthController {
           timestamp: new Date().toISOString(),
         });
       } catch (err) {
-        res.clearCookie('token');
-        res.clearCookie('refreshToken');
+        clearAuthCookies(res);
         throw err;
       }
     } catch (error) {

@@ -33,8 +33,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useQueryClient } from "@tanstack/react-query"
 import { Textarea } from "@/components/ui/textarea"
-import { useAmPrototype } from "@/components/providers/am-prototype-provider"
+import { useWorkspaceUi } from "@/components/providers/workspace-ui-provider"
+import { usePatchApiV1ContractsId } from "@/lib/api/generated/contracts/contracts"
+import { usePostApiV1ScopeItemsIdLogs } from "@/lib/api/generated/scope-items/scope-items"
+import { isUuidString } from "@/lib/api/contract-mapper"
+import {
+  useWorkspaceContracts,
+  useWorkspaceRole,
+} from "@/lib/hooks/use-workspace-data"
 import {
   calculateContractMetrics,
   ContractProject,
@@ -65,15 +73,16 @@ const SUGGESTED_TAGS = [
 ]
 
 export function AmTaskDashboardView() {
-  const {
-    contracts,
-    roleView,
-    formatMoney,
-    openContractDetail,
-    logMilestoneMandays,
-    addContractTag,
-    removeContractTag,
-  } = useAmPrototype()
+  const queryClient = useQueryClient()
+  const logMandaysMutation = usePostApiV1ScopeItemsIdLogs()
+  const updateContractMutation = usePatchApiV1ContractsId()
+  const { contracts, canQueryRealApi } = useWorkspaceContracts({
+    includeDetails: true,
+  })
+  const { isPmRole } = useWorkspaceRole()
+  const roleView = isPmRole ? "PM" : "AM"
+
+  const { formatMoney, openContractDetail } = useWorkspaceUi()
 
   const [categoryFilter, setCategoryFilter] =
     React.useState<InboxCategory>("ALL")
@@ -144,7 +153,7 @@ export function AmTaskDashboardView() {
           priority: m.overdueAmount > 0 ? "HIGH" : "MEDIUM",
           badgeLabel:
             m.readyToBillInstallments.length > 0
-              ? "Mốc đã xong • Gửi ĐNTT"
+              ? "Mốc đã xong • Đòi tiền"
               : "Quá hạn thanh toán",
           badgeClass:
             m.overdueAmount > 0
@@ -245,24 +254,74 @@ export function AmTaskDashboardView() {
     setLogReasonDraft("")
   }
 
-  const handleConfirmQuickLog = () => {
+  const handleConfirmQuickLog = async () => {
     if (!quickLogContract || !selectedMilestoneId) return
     if (!logReasonDraft.trim()) {
       toast.error("Vui lòng nhập ngắn gọn hạng mục đã làm trong kỳ")
       return
     }
-    logMilestoneMandays(quickLogContract.id, selectedMilestoneId, {
-      deltaMandays: spentMdDraft,
-      note: logReasonDraft.trim(),
-      logType: "PERIODIC_CHECK",
-    })
-    setQuickLogContract(null)
+    if (!canQueryRealApi || !isUuidString(selectedMilestoneId)) {
+      toast.error("Không tìm thấy mã Mốc bàn giao hợp lệ")
+      return
+    }
+    try {
+      await logMandaysMutation.mutateAsync({
+        id: selectedMilestoneId,
+        data: {
+          delta_mandays: spentMdDraft,
+          note: logReasonDraft.trim(),
+          check_date: new Date().toISOString().slice(0, 10),
+        },
+      })
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/contracts"] })
+      queryClient.invalidateQueries({
+        queryKey: [`/api/v1/contracts/${quickLogContract.id}`],
+      })
+      toast.success(`Đã ghi nhận +${spentMdDraft} MD vào cơ sở dữ liệu!`)
+      setQuickLogContract(null)
+    } catch {
+      toast.error("Không thể cập nhật ngày công lên máy chủ")
+    }
   }
 
-  const handleAddTag = (tag: string) => {
+  const handleAddTag = async (tag: string) => {
     if (!tagModalContract || !tag.trim()) return
-    addContractTag(tagModalContract.id, tag.trim())
+    const nextTags = Array.from(
+      new Set([...(tagModalContract.amCustomTags || []), tag.trim()])
+    )
+    try {
+      await updateContractMutation.mutateAsync({
+        id: tagModalContract.id,
+        data: { am_custom_tags: nextTags },
+      })
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/contracts"] })
+      queryClient.invalidateQueries({
+        queryKey: [`/api/v1/contracts/${tagModalContract.id}`],
+      })
+      toast.success(`Đã gắn nhãn [${tag.trim()}]`)
+    } catch {
+      toast.error("Không thể lưu nhãn hợp đồng")
+    }
     setNewTagText("")
+  }
+
+  const handleRemoveTag = async (contractId: string, tag: string) => {
+    const target = contracts.find((c) => c.id === contractId)
+    if (!target) return
+    const nextTags = (target.amCustomTags || []).filter((t) => t !== tag)
+    try {
+      await updateContractMutation.mutateAsync({
+        id: contractId,
+        data: { am_custom_tags: nextTags },
+      })
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/contracts"] })
+      queryClient.invalidateQueries({
+        queryKey: [`/api/v1/contracts/${contractId}`],
+      })
+      toast.success(`Đã gỡ nhãn [${tag}]`)
+    } catch {
+      toast.error("Không thể gỡ nhãn hợp đồng")
+    }
   }
 
   return (
@@ -439,7 +498,7 @@ export function AmTaskDashboardView() {
                           <span>[{t}]</span>
                           <button
                             type="button"
-                            onClick={() => removeContractTag(contract.id, t)}
+                            onClick={() => handleRemoveTag(contract.id, t)}
                             aria-label={`Xóa nhãn ${t}`}
                             className="inline-flex size-5 items-center justify-center hover:bg-amber-200 rounded transition-colors"
                           >

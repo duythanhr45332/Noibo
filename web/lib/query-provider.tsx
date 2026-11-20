@@ -2,12 +2,9 @@
 
 /**
  * TanStack Query Provider — bọc toàn bộ app để các hooks
- * useQuery / useMutation / useInfiniteQuery hoạt động được.
- *
- * Đặt ở layout.tsx (Root Layout).
+ * useQuery / useMutation / useInfiniteQuery hoạt động mượt mà khi chuyển trang.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useState, type ReactNode } from 'react'
 
 export function QueryProvider({ children }: { children: ReactNode }) {
@@ -17,7 +14,8 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         defaultOptions: {
           queries: {
             refetchOnWindowFocus: false,
-            staleTime: 0,
+            staleTime: 60_000,
+            gcTime: 5 * 60_000,
             retry: 1,
           },
           mutations: {

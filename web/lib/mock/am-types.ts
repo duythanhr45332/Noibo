@@ -35,6 +35,7 @@ export interface Customer {
   taxCode: string
   industry: string
   address: string
+  note?: string
   techContact: CustomerContact
   accountingContact: CustomerContact
   createdAt: string
@@ -89,8 +90,15 @@ export type CreditLogType =
   | "PERIODIC_CHECK"
   | "FINISH_MILESTONE"
   | "REOPEN_MILESTONE"
+  | "DISBURSE_BONUS"
   | "FREE_SUPPORT"
   | "UPSELL_ADDED"
+
+export type BonusPayoutStatus =
+  | "LOCKED"
+  | "ELIGIBLE"
+  | "DISBURSED"
+  | "CLAWBACK_PENDING"
 
 export interface ScopeProgressLog {
   id: string
@@ -148,31 +156,9 @@ export interface ScopeItem {
   isAccepted: boolean
   acceptedDate?: string
   acceptanceNote?: string
-}
-
-export interface KeyMilestone {
-  id: string
-  order: number
-  title: string
-  dueDate: string
-  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "DELAYED"
-  progressPercent: number
-  pmNote: string
-  blockerNote?: string
-  blockerType?: "NONE" | "CLIENT_DELAY" | "TECH_BLOCKER" | "SCOPE_DISPUTE"
-  updatedAt: string
-}
-
-export interface PeriodicCheckIn {
-  id: string
-  checkInDate: string
-  pmName: string
-  cumulativeActualMandays: number
-  deltaMandays: number
-  overallProgressPercent: number
-  summary: string
-  blockerDescription?: string
-  forceRedFlag: boolean
+  bonusPayoutStatus?: BonusPayoutStatus
+  bonusDisbursedAt?: string
+  bonusPaidAmountVnd?: number
 }
 
 export type ChangeRequestType = "UPSELL" | "FREE_SUPPORT"
@@ -290,7 +276,7 @@ export interface ContractProject {
   // Cấu hình Thuế & Hóa đơn
   hasVatItems: boolean
   hasNonVatItems: boolean
-  vatRatePercent: 8 | 10
+  vatRatePercent: number
   vatPortionAmount: number
   nonVatPortionAmount: number
   invoiceMethod: InvoiceMethod
@@ -304,8 +290,6 @@ export interface ContractProject {
   // Danh sách con
   installments: PaymentInstallment[]
   scopeItems: ScopeItem[]
-  milestones: KeyMilestone[]
-  checkIns: PeriodicCheckIn[]
   changeRequests: ChangeRequestItem[]
   handover: HandoverChecklist
 
@@ -344,6 +328,42 @@ export function getMilestoneFreeSupportUsedMd(
       0
     )
   return Number(sum.toFixed(2))
+}
+
+/**
+ * Tính Đơn giá 1 Manday động theo từng dự án (không cố định):
+ * Đơn giá 1 MD = floor(Tổng Credit Y / Tổng Limit MD của dự án).
+ */
+export function getEffectiveMandayRate(contract: ContractProject): number {
+  const baseVal = Number(contract.baseContractValue || 0)
+  const riskPct = Math.min(100, Math.max(0, Number(contract.riskReservePercent || 0)))
+  const riskReserveAmount = Math.round((baseVal * riskPct) / 100)
+  const baseCreditY = Math.max(
+    0,
+    baseVal -
+      (Number(contract.fixedCostAllocation || 0) +
+        Number(contract.salesCommissionAmount || 0) +
+        riskReserveAmount)
+  )
+  const upsellCreditY = Math.round(
+    Number(contract.approvedUpsellValue || 0) * (1 - riskPct / 100)
+  )
+  const totalCreditY = baseCreditY + upsellCreditY
+
+  const sumScopeLimits = (contract.scopeItems || []).reduce(
+    (sum, s) => sum + Number(s.limitMandays ?? 0),
+    0
+  )
+  const effectiveLimit =
+    sumScopeLimits > 0
+      ? sumScopeLimits
+      : Number(contract.initialMaxMandays || 0) +
+        Number(contract.upsellAddedMandays || 0)
+
+  if (totalCreditY > 0 && effectiveLimit > 0) {
+    return Math.floor(totalCreditY / effectiveLimit)
+  }
+  return Math.max(0, Number(contract.standardMandayRate || 0))
 }
 
 export function getMilestoneFourMetrics(
@@ -399,8 +419,9 @@ export function getMilestoneFourMetrics(
 
   // Khi Mốc hoàn thành (hoặc tạm tính), nếu Real < Limit -> Dôi dư:
   // 50% giữ lại bù rủi ro cho các mốc sau, 50% chia thưởng (Lead/PM, Dev, Sale/AM)
+  const dynamicMandayRate = getEffectiveMandayRate(contract)
   const surplusMandays = limitMandays - realMandays
-  const surplusValueVnd = surplusMandays * contract.standardMandayRate
+  const surplusValueVnd = surplusMandays * dynamicMandayRate
   const bonusSplit50Md =
     surplusMandays > 0 ? Math.round(surplusMandays * 0.5 * 10) / 10 : 0
   const riskReserve50Md =
@@ -423,19 +444,25 @@ export function getMilestoneFourMetrics(
       : contract.installments.length > 0 &&
         contract.installments.every((inst) => inst.paymentStatus === "PAID")
 
-  // Cách B: Chỉ mở khóa 50% thưởng của Mốc khi Mốc đã Finish VÀ Khách đã thanh toán xong Đợt tiền gắn với Mốc đó
+  // Cách B: Mở khóa 50% thưởng khi Mốc đã Finish VÀ Đợt liên kết đã PAID; kế toán xác nhận Thực chi (DISBURSED)
   const bonusUnlockStatus:
     | "OVER_LIMIT"
     | "IN_PROGRESS"
     | "PENDING_PAYMENT"
-    | "UNLOCKED" =
-    surplusMandays <= 0
-      ? "OVER_LIMIT"
-      : !isFinished
-      ? "IN_PROGRESS"
-      : isLinkedPaymentPaid
-      ? "UNLOCKED"
-      : "PENDING_PAYMENT"
+    | "UNLOCKED"
+    | "DISBURSED"
+    | "CLAWBACK_PENDING" =
+    item.bonusPayoutStatus === "CLAWBACK_PENDING"
+      ? "CLAWBACK_PENDING"
+      : item.bonusPayoutStatus === "DISBURSED"
+        ? "DISBURSED"
+        : surplusMandays <= 0
+          ? "OVER_LIMIT"
+          : !isFinished
+            ? "IN_PROGRESS"
+            : isLinkedPaymentPaid || item.bonusPayoutStatus === "ELIGIBLE"
+              ? "UNLOCKED"
+              : "PENDING_PAYMENT"
 
   return {
     limitMandays,
@@ -457,38 +484,61 @@ export function getMilestoneFourMetrics(
     linkedInstallments,
     isLinkedPaymentPaid,
     bonusUnlockStatus,
-    limitValueVnd: limitMandays * contract.standardMandayRate,
-    targetValueVnd: targetMandays * contract.standardMandayRate,
-    estimateValueVnd: estimateMandays * contract.standardMandayRate,
-    realValueVnd: realMandays * contract.standardMandayRate,
+    limitValueVnd: limitMandays * dynamicMandayRate,
+    targetValueVnd: targetMandays * dynamicMandayRate,
+    estimateValueVnd: estimateMandays * dynamicMandayRate,
+    realValueVnd: realMandays * dynamicMandayRate,
   }
 }
 
 /**
- * Kiểm tra trạng thái Checklist Khởi tạo dự án trước khi Kick-off
+ * Kiểm tra & Tự động đánh giá Checklist Khởi tạo dự án trước khi Kick-off (Pre-Project Gatekeeper)
+ * Tự động check dựa trên dữ liệu thực tế của Hợp đồng (Drive URL, Mốc bàn giao, Lộ trình ngày, Ước tính bàn giao)
+ * kết hợp cùng trạng thái xác nhận thủ công.
  */
 export function evaluateKickoffChecklist(contract: ContractProject) {
+  const totalHandoverMd = (contract.scopeItems || []).reduce(
+    (acc, s) => acc + Number(s.handoverEstimatedMandays ?? 0),
+    0
+  )
+  const hasDriveUrl = Boolean(contract.googleDriveUrl?.trim())
+  const hasValidScope =
+    (contract.scopeItems || []).length > 0 &&
+    (contract.scopeItems || []).some(
+      (s) => Number(s.limitMandays ?? s.estimatedMandays ?? 0) > 0
+    )
+  const hasValidTimeline = Boolean(
+    contract.startDate?.trim() && contract.expectedEndDate?.trim()
+  )
+  const hasHandoverEstimate = totalHandoverMd > 0
+
   const cl: PreKickoffChecklist = contract.kickoffChecklist || {
-    driveRootCreated: contract.drivePermissionsVerified,
-    driveTeamDocCreated: contract.drivePermissionsVerified,
-    driveSharedDocCreated: contract.drivePermissionsVerified,
-    drivePermissionsGranted: contract.drivePermissionsVerified,
-    pmConfirmedScope: contract.phase !== "PRE_PROJECT",
-    kickoffTimelineConfirmed: contract.phase !== "PRE_PROJECT",
+    driveRootCreated: contract.drivePermissionsVerified || hasDriveUrl,
+    driveTeamDocCreated: contract.drivePermissionsVerified || hasDriveUrl,
+    driveSharedDocCreated: contract.drivePermissionsVerified || hasDriveUrl,
+    drivePermissionsGranted: contract.drivePermissionsVerified || hasDriveUrl,
+    pmConfirmedScope: contract.phase !== "PRE_PROJECT" || hasValidScope,
+    kickoffTimelineConfirmed: contract.phase !== "PRE_PROJECT" || hasValidTimeline,
     kickoffDate: contract.startDate,
-    handoverEstimateConfirmed: contract.phase !== "PRE_PROJECT",
-    handoverEstimateMandays: 4,
+    handoverEstimateConfirmed:
+      contract.phase !== "PRE_PROJECT" || hasHandoverEstimate,
+    handoverEstimateMandays: totalHandoverMd || 4,
   }
 
-  const isDriveReady =
-    cl.driveRootCreated &&
-    cl.driveTeamDocCreated &&
-    cl.driveSharedDocCreated &&
-    cl.drivePermissionsGranted
-  const isProjectDocReady = cl.pmConfirmedScope
-  const isTimelineReady = cl.kickoffTimelineConfirmed
+  const isDriveManualReady = Boolean(
+    contract.drivePermissionsVerified ||
+      (cl.driveRootCreated &&
+        cl.driveTeamDocCreated &&
+        cl.driveSharedDocCreated &&
+        cl.drivePermissionsGranted)
+  )
+  const isDriveReady = hasDriveUrl || isDriveManualReady
+  const isProjectDocReady = Boolean(cl.pmConfirmedScope) || hasValidScope
+  const isTimelineReady = Boolean(cl.kickoffTimelineConfirmed) || hasValidTimeline
   const isHandoverEstimateReady =
-    cl.handoverEstimateConfirmed && cl.handoverEstimateMandays > 0
+    (Boolean(cl.handoverEstimateConfirmed) &&
+      Number(cl.handoverEstimateMandays || 0) > 0) ||
+    hasHandoverEstimate
 
   const completedCount = [
     isDriveReady,
@@ -505,6 +555,13 @@ export function evaluateKickoffChecklist(contract: ContractProject) {
     isProjectDocReady,
     isTimelineReady,
     isHandoverEstimateReady,
+    autoChecks: {
+      drive: hasDriveUrl,
+      scope: hasValidScope,
+      timeline: hasValidTimeline,
+      handover: hasHandoverEstimate,
+      totalHandoverMd,
+    },
     completedCount,
     isAllChecklistReady,
   }
@@ -564,8 +621,11 @@ export function calculateContractMetrics(contract: ContractProject) {
     contract.baseContractValue -
       (contract.fixedCostAllocation + contract.salesCommissionAmount + riskReserveAmount)
   )
-  const upsellInternalCreditVnd =
-    contract.upsellAddedMandays * contract.standardMandayRate
+  const effectiveMandayRate = getEffectiveMandayRate(contract)
+  const upsellInternalCreditVnd = Math.round(
+    contract.approvedUpsellValue *
+      (1 - Math.min(100, Math.max(0, Number(contract.riskReservePercent || 0))) / 100)
+  )
   const totalInternalCreditVnd = baseInternalCreditVnd + upsellInternalCreditVnd
 
   // Tổng hợp 4 chỉ số từ các Mốc bàn giao (hoặc cấp dự án)
@@ -643,9 +703,9 @@ export function calculateContractMetrics(contract: ContractProject) {
     contract.installments[0].paymentStatus === "PAID"
 
   const kickoffEval = evaluateKickoffChecklist(contract)
+  // Quy tắc cứng: Khách BẮT BUỘC phải thanh toán Tạm ứng Đợt 1 (PAID) + đủ 4/4 Checklist Pre mới được Start dự án
   const canKickoffToInProject =
-    (isFirstInstallmentPaid || Boolean(contract.bodAllowKickoffWithoutAdvance)) &&
-    kickoffEval.isAllChecklistReady
+    isFirstInstallmentPaid && kickoffEval.isAllChecklistReady
 
   const isAllInstallmentsPaid =
     contract.installments.length > 0 &&
@@ -655,9 +715,10 @@ export function calculateContractMetrics(contract: ContractProject) {
     contract.installments.length > 0 &&
     contract.installments.every(
       (i) =>
-        i.vatInvoiceStatus === "ISSUED" &&
-        Boolean(i.vatInvoiceNumber?.trim()) &&
-        Boolean(i.vatInvoiceFileUrl?.trim())
+        Number(i.vatAmount || 0) <= 0 ||
+        (i.vatInvoiceStatus === "ISSUED" &&
+          Boolean(i.vatInvoiceNumber?.trim()) &&
+          Boolean(i.vatInvoiceFileUrl?.trim()))
     )
 
   const isHandoverComplete =
@@ -683,7 +744,7 @@ export function calculateContractMetrics(contract: ContractProject) {
   // - 50% giữ lại bù rủi ro cho các mốc sau (nếu mốc sau bị trễ/âm)
   // - 50% còn lại chia thưởng cho Lead/PM, Dev và Sale/AM
   const surplusMandays = totalMaxMandays - effectiveRealMandays
-  const surplusValueVnd = surplusMandays * contract.standardMandayRate
+  const surplusValueVnd = surplusMandays * effectiveMandayRate
 
   // Tính Quỹ bù rủi ro tích lũy từ các Mốc đã Finish có lời, trừ đi các Mốc bị âm
   let finishedMilestonesRiskPoolVnd = 0
@@ -701,7 +762,10 @@ export function calculateContractMetrics(contract: ContractProject) {
       finishedMilestonesBonusPoolVnd += mm.teamBonus50Vnd
       cumulativeRiskReserveMd =
         Math.round((cumulativeRiskReserveMd + mm.riskReserve50Md) * 10) / 10
-      if (mm.bonusUnlockStatus === "UNLOCKED") {
+      if (
+        mm.bonusUnlockStatus === "UNLOCKED" ||
+        mm.bonusUnlockStatus === "DISBURSED"
+      ) {
         unlockedBonusPoolVnd += mm.teamBonus50Vnd
         unlockedBonusMd =
           Math.round((unlockedBonusMd + mm.bonusSplit50Md) * 10) / 10
@@ -760,11 +824,10 @@ export function calculateContractMetrics(contract: ContractProject) {
   )
   const totalFreeSupportRealMd = totalFreeSupportDevMd
 
-  // Tính số ngày kể từ lần check Mandays gần nhất (để nhắc việc AM nếu quá 3-5 ngày chưa cập nhật)
-  const todayRef = new Date("2026-10-29T10:00:00+07:00")
+  // Tính số ngày kể từ lần check Mandays gần nhất (để nhắc việc AM nếu quá 2-7 ngày chưa cập nhật)
+  const todayRef = new Date()
   const latestCheckDateStr =
     contract.lastCheckInDate ||
-    contract.checkIns[0]?.checkInDate ||
     contract.scopeItems
       .map((s) => s.lastCheckDate || s.progressLogs?.[0]?.updatedAt?.slice(0, 10))
       .filter(Boolean)
@@ -868,7 +931,7 @@ export function calculateContractMetrics(contract: ContractProject) {
   }
   if (readyToBillInstallments.length > 0) {
     autoBlockers.push(
-      `Mốc bàn giao đã Finish → Cần gửi ĐNTT thu ${readyToBillInstallments[0].name}`
+      `Mốc bàn giao đã Finish → Đòi tiền ${readyToBillInstallments[0].name}`
     )
   }
   if (delayedScopeItems.length > 0) {

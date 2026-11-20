@@ -26,7 +26,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useAmPrototype } from "@/components/providers/am-prototype-provider"
+import { useQueryClient } from "@tanstack/react-query"
+import { useAuth } from "@/components/providers/auth-provider"
+import { useWorkspaceUi } from "@/components/providers/workspace-ui-provider"
+import {
+  usePatchApiV1AmExpensesIdStatus,
+  usePostApiV1AmExpenses,
+} from "@/lib/api/generated/am-expenses/am-expenses"
+import { isUuidString } from "@/lib/api/contract-mapper"
+import {
+  useWorkspaceContracts,
+  useWorkspaceRole,
+} from "@/lib/hooks/use-workspace-data"
 import {
   AmExpenseCategory,
   AmExpenseItem,
@@ -75,14 +86,17 @@ interface FlattenedExpenseRow {
 }
 
 export function AmExpensesView() {
-  const {
-    contracts,
-    formatMoney,
-    openContractDetail,
-    updateAmAdvanceAmount,
-    addAmExpense,
-    toggleAmExpenseStatus,
-  } = useAmPrototype()
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const { contracts, canQueryRealApi } = useWorkspaceContracts({
+    includeDetails: true,
+  })
+  const { canConfirmAccountantOps: canApproveReimburse } = useWorkspaceRole()
+
+  const createExpenseMutation = usePostApiV1AmExpenses()
+  const updateExpenseStatusMutation = usePatchApiV1AmExpensesIdStatus()
+
+  const { formatMoney, openContractDetail } = useWorkspaceUi()
 
   const [searchQuery, setSearchQuery] = React.useState("")
   const [projectFilter, setProjectFilter] = React.useState<string>("ALL")
@@ -98,6 +112,13 @@ export function AmExpensesView() {
   const [expContractId, setExpContractId] = React.useState(
     contracts[0]?.id || ""
   )
+
+  React.useEffect(() => {
+    setExpContractId((prev) => {
+      if (prev && contracts.some((c) => c.id === prev)) return prev
+      return contracts[0]?.id || ""
+    })
+  }, [contracts])
   const [expCategory, setExpCategory] =
     React.useState<AmExpenseCategory>("TAXI")
   const [expDate, setExpDate] = React.useState(
@@ -170,28 +191,88 @@ export function AmExpensesView() {
 
   const handleSaveAdvance = () => {
     if (!editingAdvanceContract) return
-    const val = Math.max(0, Number(advanceDraftVnd) || 0)
-    updateAmAdvanceAmount(editingAdvanceContract.id, val)
+    toast.info(
+      "Hạn mức tạm ứng AM được quản trị cố định theo cấu hình hợp đồng trên PostgreSQL"
+    )
     setEditingAdvanceContract(null)
   }
 
-  const handleCreateExpense = () => {
+  const handleCreateExpense = async () => {
+    if (!expContractId) {
+      toast.error("Vui lòng chọn Dự án phát sinh chi phí")
+      return
+    }
     if (!expDescription.trim()) {
       toast.error("Vui lòng nhập nội dung khoản chi (VD: Taxi đi họp UAT)")
       return
     }
     const amt = Math.max(1000, Number(expAmountVnd) || 0)
-    addAmExpense(expContractId, {
-      date: expDate,
-      category: expCategory,
-      milestoneCode: expMilestoneCode || "Chung",
-      description: expDescription.trim(),
-      amountVnd: amt,
-      status: "RECORDED",
-      createdBy: "AM Thảo",
-    })
-    setExpDescription("")
-    setAddExpenseOpen(false)
+
+    if (!canQueryRealApi || !isUuidString(expContractId)) {
+      toast.error("Không tìm thấy mã hợp đồng hợp lệ")
+      return
+    }
+
+    try {
+      const targetContract = contracts.find((c) => c.id === expContractId)
+      const matchedScope = targetContract?.scopeItems.find(
+        (s) => s.code === expMilestoneCode || s.id === expMilestoneCode
+      )
+      await createExpenseMutation.mutateAsync({
+        data: {
+          contract_id: expContractId,
+          scope_item_id:
+            matchedScope && isUuidString(matchedScope.id)
+              ? matchedScope.id
+              : null,
+          expense_date: expDate,
+          category: expCategory as never,
+          description: expDescription.trim(),
+          amount_vnd: amt,
+        },
+      })
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/contracts"] })
+      queryClient.invalidateQueries({
+        queryKey: [`/api/v1/contracts/${expContractId}`],
+      })
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/am-expenses"] })
+      toast.success("Đã ghi nhận khoản chi AM vào cơ sở dữ liệu!")
+      setExpDescription("")
+      setAddExpenseOpen(false)
+    } catch {
+      toast.error("Không thể lưu khoản chi AM lên máy chủ")
+    }
+  }
+
+  const handleToggleExpenseStatus = async (
+    contractId: string,
+    expenseId: string,
+    currentlyReimbursed: boolean
+  ) => {
+    if (!canQueryRealApi || !isUuidString(expenseId)) {
+      toast.error("Mã khoản chi không hợp lệ")
+      return
+    }
+    try {
+      await updateExpenseStatusMutation.mutateAsync({
+        id: expenseId,
+        data: {
+          status: currentlyReimbursed ? "PENDING_REIMBURSE" : "REIMBURSED",
+        },
+      })
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/contracts"] })
+      queryClient.invalidateQueries({
+        queryKey: [`/api/v1/contracts/${contractId}`],
+      })
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/am-expenses"] })
+      toast.success(
+        currentlyReimbursed
+          ? "Đã chuyển khoản chi về trạng thái Chờ quyết toán"
+          : "Đã xác nhận hoàn ứng khoản chi AM!"
+      )
+    } catch {
+      toast.error("Không thể cập nhật trạng thái hoàn ứng")
+    }
   }
 
   return (
@@ -469,8 +550,18 @@ export function AmExpensesView() {
                       <Button
                         size="sm"
                         variant="outline"
+                        disabled={!canApproveReimburse}
+                        title={
+                          canApproveReimburse
+                            ? "Xác nhận hoàn ứng chi phí AM"
+                            : "Chỉ Kế toán / AM / BOD / Admin được duyệt hoàn ứng"
+                        }
                         onClick={() =>
-                          toggleAmExpenseStatus(contract.id, expense.id)
+                          handleToggleExpenseStatus(
+                            contract.id,
+                            expense.id,
+                            isReimbursed
+                          )
                         }
                         className="h-8 px-2.5 text-xs border-slate-200"
                       >

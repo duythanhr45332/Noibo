@@ -104,6 +104,98 @@ export const usePostApiV1AuthLogin = <TError = void,
       return useMutation(getPostApiV1AuthLoginMutationOptions(options), queryClient);
     }
     /**
+ * @summary Kiểm tra trạng thái phiên đăng nhập hiện tại (tự làm mới nếu có refreshToken)
+ */
+export const getApiV1AuthSession = (
+
+ options?: SecondParameter<typeof customAxiosInstance>,signal?: AbortSignal
+) => {
+
+
+      return customAxiosInstance<void>(
+      {url: `/api/v1/auth/session`, method: 'GET', signal
+    },
+      options);
+    }
+
+
+
+
+export const getGetApiV1AuthSessionQueryKey = () => {
+    return [
+    `/api/v1/auth/session`
+    ] as const;
+    }
+
+
+export const getGetApiV1AuthSessionQueryOptions = <TData = Awaited<ReturnType<typeof getApiV1AuthSession>>, TError = unknown>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1AuthSession>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetApiV1AuthSessionQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getApiV1AuthSession>>> = ({ signal }) => getApiV1AuthSession(requestOptions, signal);
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getApiV1AuthSession>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetApiV1AuthSessionQueryResult = NonNullable<Awaited<ReturnType<typeof getApiV1AuthSession>>>
+export type GetApiV1AuthSessionQueryError = unknown
+
+
+export function useGetApiV1AuthSession<TData = Awaited<ReturnType<typeof getApiV1AuthSession>>, TError = unknown>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1AuthSession>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1AuthSession>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1AuthSession>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetApiV1AuthSession<TData = Awaited<ReturnType<typeof getApiV1AuthSession>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1AuthSession>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getApiV1AuthSession>>,
+          TError,
+          Awaited<ReturnType<typeof getApiV1AuthSession>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetApiV1AuthSession<TData = Awaited<ReturnType<typeof getApiV1AuthSession>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1AuthSession>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Kiểm tra trạng thái phiên đăng nhập hiện tại (tự làm mới nếu có refreshToken)
+ */
+
+export function useGetApiV1AuthSession<TData = Awaited<ReturnType<typeof getApiV1AuthSession>>, TError = unknown>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getApiV1AuthSession>>, TError, TData>>, request?: SecondParameter<typeof customAxiosInstance>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetApiV1AuthSessionQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+/**
  * @summary Lấy thông tin tài khoản hiện tại
  */
 export const getApiV1AuthMe = (
