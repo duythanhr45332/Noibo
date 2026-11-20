@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { getJwtSecret, getJwtExpiresIn, JWT_ALGORITHM } = require('../config/jwt');
 
 class RefreshAccessToken {
   constructor(userRepository, refreshTokenRepository) {
@@ -78,9 +79,8 @@ class RefreshAccessToken {
       );
     }
 
-    const secret =
-      process.env.JWT_SECRET || 'fallback_secret_key_for_development_only';
-    const expiresIn = process.env.JWT_EXPIRES_IN || '8h';
+    const secret = getJwtSecret();
+    const expiresIn = getJwtExpiresIn();
 
     const payload = {
       sub: user.user_id,
@@ -89,7 +89,10 @@ class RefreshAccessToken {
       role: user.role,
     };
 
-    const accessToken = jwt.sign(payload, secret, { expiresIn });
+    const accessToken = jwt.sign(payload, secret, {
+      expiresIn,
+      algorithm: JWT_ALGORITHM,
+    });
 
     return {
       token: accessToken,

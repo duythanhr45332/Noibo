@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { getJwtSecret, getJwtExpiresIn, JWT_ALGORITHM } = require('../config/jwt');
 
 class AuthenticateUser {
   constructor(userRepository, refreshTokenRepository = null) {
@@ -32,9 +33,8 @@ class AuthenticateUser {
       throw error;
     }
 
-    const secret =
-      process.env.JWT_SECRET || 'fallback_secret_key_for_development_only';
-    const expiresIn = process.env.JWT_EXPIRES_IN || '8h';
+    const secret = getJwtSecret();
+    const expiresIn = getJwtExpiresIn();
 
     const payload = {
       sub: user.user_id,
@@ -43,7 +43,10 @@ class AuthenticateUser {
       role: user.role,
     };
 
-    const token = jwt.sign(payload, secret, { expiresIn });
+    const token = jwt.sign(payload, secret, {
+      expiresIn,
+      algorithm: JWT_ALGORITHM,
+    });
 
     let refreshToken = null;
     if (this.refreshTokenRepository) {

@@ -1,4 +1,7 @@
 require('./polyfill');
+require('dotenv').config();
+const { assertJwtConfig } = require('./config/jwt');
+assertJwtConfig();
 const app = require('./app');
 
 // Port mặc định 8081 (tách biệt với VPCC chạy ở 8080)

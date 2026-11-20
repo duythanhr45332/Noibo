@@ -16,7 +16,9 @@ services:
       - DB_USER=${DB_USER:?DB_USER is required}
       - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
       - DB_NAME=${DB_NAME:?DB_NAME is required}
-      - JWT_SECRET=${JWT_SECRET}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required (minimum 32 characters)}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
     volumes:
       - erp_am_uploads:/app/uploads
 

@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const HttpStatus = require('../../../utils/http-status');
+const { getJwtSecret, JWT_ALGORITHM } = require('../../../config/jwt');
 const AuthenticateUser = require('../../../use_cases/AuthenticateUser');
 const GetMeProfile = require('../../../use_cases/GetMeProfile');
 const RefreshAccessToken = require('../../../use_cases/RefreshAccessToken');
@@ -121,12 +122,13 @@ class AuthController {
         authHeader && authHeader.startsWith('Bearer ')
           ? authHeader.split(' ')[1]
           : req.cookies?.token || null;
-      const secret =
-        process.env.JWT_SECRET || 'fallback_secret_key_for_development_only';
+      const secret = getJwtSecret();
 
       if (accessToken) {
         try {
-          const decoded = jwt.verify(accessToken, secret);
+          const decoded = jwt.verify(accessToken, secret, {
+            algorithms: [JWT_ALGORITHM],
+          });
           const profile = await getMeProfileUseCase.execute(
             decoded.sub || decoded.user_id
           );
@@ -145,7 +147,9 @@ class AuthController {
       if (refreshToken) {
         try {
           const refreshed = await refreshAccessTokenUseCase.execute(refreshToken);
-          const decodedRefreshed = jwt.verify(refreshed.token, secret);
+          const decodedRefreshed = jwt.verify(refreshed.token, secret, {
+            algorithms: [JWT_ALGORITHM],
+          });
           const profile = await getMeProfileUseCase.execute(
             decodedRefreshed.sub || decodedRefreshed.user_id
           );

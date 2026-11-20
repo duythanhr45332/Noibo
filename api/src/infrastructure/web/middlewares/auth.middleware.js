@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const db = require('../../../config/database');
+const { getJwtSecret, JWT_ALGORITHM } = require('../../../config/jwt');
 const logger = require('../../../utils/logger');
 
 /**
@@ -32,11 +33,10 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    const secret =
-      process.env.JWT_SECRET || 'fallback_secret_key_for_development_only';
+    const secret = getJwtSecret();
     let decoded;
     try {
-      decoded = jwt.verify(token, secret);
+      decoded = jwt.verify(token, secret, { algorithms: [JWT_ALGORITHM] });
     } catch (jwtErr) {
       if (jwtErr.name === 'TokenExpiredError') {
         return res.status(401).json({

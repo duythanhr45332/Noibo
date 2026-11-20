@@ -48,6 +48,7 @@ import { PersonAvatar } from "@/components/features/am/ProductiveHomeDashboard"
 import { FastLink } from "@/lib/fast-nav"
 import { useGetApiV1AuditLogs } from "@/lib/api/generated/audit-logs/audit-logs"
 import { cn } from "@/lib/utils"
+import { escapeCsvCell } from "@/lib/utils/export-utils"
 
 interface NormalizedAuditLog {
   audit_log_id: string
@@ -286,8 +287,7 @@ function buildInlineSummary(log: NormalizedAuditLog): string {
 }
 
 function csvEscape(value: string): string {
-  const safe = String(value ?? "").replace(/"/g, '""')
-  return `"${safe}"`
+  return escapeCsvCell(value)
 }
 
 export function AuditLogViewer() {

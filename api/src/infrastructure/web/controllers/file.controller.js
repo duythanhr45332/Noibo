@@ -5,7 +5,11 @@ const HttpStatus = require('../../../utils/http-status');
 const ApiError = require('../../../utils/api-error');
 const { ROLES } = require('../../../domain/constants/roles');
 const PostgresFileRepository = require('../../database/PostgresFileRepository');
-const { UPLOAD_DIR } = require('../middlewares/upload.middleware');
+const {
+  UPLOAD_DIR,
+  ALLOWED_MIME_TYPES,
+  SAFE_INLINE_MIME_TYPES,
+} = require('../middlewares/upload.middleware');
 
 const fileRepository = new PostgresFileRepository();
 
@@ -118,12 +122,31 @@ class FileController {
         throw new ApiError(HttpStatus.NOT_FOUND, 'Tệp vật lý không tồn tại trên máy chủ', 'id');
       }
 
-      const encodedName = encodeURIComponent(fileRecord.original_name);
-      res.setHeader('Content-Type', fileRecord.mime_type || 'application/octet-stream');
+      const safeOriginalName = String(fileRecord.original_name || 'download')
+        .replace(/[\r\n"]/g, '_')
+        .trim() || 'download';
+      const encodedName = encodeURIComponent(safeOriginalName);
+      const safeMime = ALLOWED_MIME_TYPES.has(fileRecord.mime_type)
+        ? fileRecord.mime_type
+        : 'application/octet-stream';
+      const disposition = SAFE_INLINE_MIME_TYPES.has(safeMime)
+        ? 'inline'
+        : 'attachment';
+
+      // Security headers chống MIME sniffing, thực thi script & cache proxy với chứng từ nội bộ
+      res.setHeader('Content-Type', safeMime);
       res.setHeader(
         'Content-Disposition',
-        `inline; filename*=UTF-8''${encodedName}`
+        `${disposition}; filename*=UTF-8''${encodedName}`
       );
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'none'; frame-ancestors 'self'"
+      );
+      res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+
       return fs.createReadStream(safePath).pipe(res);
     } catch (error) {
       next(error);
